@@ -32,3 +32,4 @@ The backend must be reachable at `NEXT_PUBLIC_API_URL`
 
 See `.env.example` (local) and `.env.production.example` (live).
 `NEXT_PUBLIC_` values are baked in at build time, so rebuild after changing them.
+`NEXT_PUBLIC_API_URL` is required for `npm run build`; the build fails without it.

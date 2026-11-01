@@ -1,8 +1,9 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { INestApplication } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import request from 'supertest';
 import { AppModule } from './../src/app.module.js';
-import { setupApp } from './../src/setup-app.js';
+import { corsOrigins, setupApp } from './../src/setup-app.js';
 
 // Needs a reachable PostgreSQL at DATABASE_URL. Easiest is inside Docker:
 // `docker compose exec backend npm run test:e2e` from the sps-erp folder.
@@ -46,13 +47,23 @@ describe('AppController (e2e)', () => {
       });
   });
 
-  it('allows the frontend on both localhost and 127.0.0.1', async () => {
-    for (const origin of ['http://localhost:3000', 'http://127.0.0.1:3000']) {
+  // The origins come from CORS_ORIGIN, so this also holds with a custom
+  // FRONTEND_PORT in Docker Compose.
+  it('allows every configured frontend origin', async () => {
+    for (const origin of corsOrigins(app.get(ConfigService))) {
       await request(app.getHttpServer())
         .get('/api/health')
         .set('Origin', origin)
         .expect('Access-Control-Allow-Origin', origin);
     }
+  });
+
+  it('refuses an unknown origin', async () => {
+    const res = await request(app.getHttpServer())
+      .get('/api/health')
+      .set('Origin', 'https://unknown.example.com');
+
+    expect(res.headers['access-control-allow-origin']).toBeUndefined();
   });
 
   afterEach(async () => {

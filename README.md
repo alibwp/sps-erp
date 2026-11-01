@@ -80,6 +80,8 @@ Changing the variables below is enough; no code or compose changes are needed.
 | `NEXT_PUBLIC_API_URL` | `https://api.your-domain.com/api`     |
 
 `NEXT_PUBLIC_API_URL` is baked in when the frontend is built, so rebuild after changing it.
+It is required for production builds: `npm run build` (and the `prod` Docker target)
+fails with an error when it is not set, instead of quietly pointing at localhost.
 
 ### Where the values go
 
@@ -94,11 +96,13 @@ Notes:
 
 - URL-encode special characters in the password (`@` → `%40`, `#` → `%23`).
 - The database's firewall or security group must allow connections from where the backend runs.
-- **AWS RDS:** the backend Docker image trusts the RDS certificate bundle, so keep
-  `DB_SSL_REJECT_UNAUTHORIZED=true`. Outside Docker, download
-  `https://truststore.pki.rds.amazonaws.com/global/global-bundle.pem` and start Node with
-  the environment variable `NODE_EXTRA_CA_CERTS=/path/to/global-bundle.pem`.
+- **AWS RDS:** the RDS certificate bundle is committed at
+  `erp-backend/certs/rds-global-bundle.pem` and the backend Docker image trusts it, so keep
+  `DB_SSL_REJECT_UNAUTHORIZED=true`. Outside Docker, start Node with the environment
+  variable `NODE_EXTRA_CA_CERTS=certs/rds-global-bundle.pem` (run from `erp-backend/`).
   Setting `DB_SSL_REJECT_UNAUTHORIZED=false` turns certificate checking off; use it only as a last resort.
+  To refresh the bundle when AWS adds new authorities, replace the file with
+  `https://truststore.pki.rds.amazonaws.com/global/global-bundle.pem` and commit it.
 - Tables are not created automatically on the live database. Once entities exist, use TypeORM migrations.
 
 ## Production images

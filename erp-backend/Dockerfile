@@ -4,7 +4,8 @@ FROM node:22-slim AS base
 WORKDIR /app
 # Trust the AWS RDS certificate authorities, so SSL to an RDS database works
 # with certificate verification on (DB_SSL_REJECT_UNAUTHORIZED=true).
-ADD --chmod=644 https://truststore.pki.rds.amazonaws.com/global/global-bundle.pem /etc/ssl/certs/rds-global-bundle.pem
+# The bundle is committed in certs/ (source and refresh steps: README.md).
+COPY certs/rds-global-bundle.pem /etc/ssl/certs/rds-global-bundle.pem
 ENV NODE_EXTRA_CA_CERTS=/etc/ssl/certs/rds-global-bundle.pem
 
 # ---- Dependencies (installed inside Linux, never copied from Windows) ----
