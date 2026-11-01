@@ -5,9 +5,7 @@ const apiUrl = process.env.NEXT_PUBLIC_API_URL;
 // localhost would make the live site call each visitor's own machine.
 if (!apiUrl && process.env.NODE_ENV === "production") {
   throw new Error(
-    "NEXT_PUBLIC_API_URL is not set for this production build. Set it to the " +
-      "live backend URL (ending in /api) in erp-frontend/.env.production, or " +
-      "pass --build-arg NEXT_PUBLIC_API_URL=https://... to docker build.",
+    "Set NEXT_PUBLIC_API_URL to the live backend URL (ending in /api).",
   );
 }
 

@@ -18,10 +18,10 @@ CMD ["npm", "run", "dev", "--", "--hostname", "0.0.0.0"]
 
 # ---- Production build ----
 FROM deps AS build
-# Optional: --build-arg NEXT_PUBLIC_API_URL=... overrides .env.production.
+# Live backend URL: --build-arg NEXT_PUBLIC_API_URL=https://.../api
 ARG NEXT_PUBLIC_API_URL
 COPY . .
-# An empty variable would hide .env.production from Next.js, so drop it.
+# Next.js treats an empty variable as set, so drop it when no value was given.
 RUN if [ -z "$NEXT_PUBLIC_API_URL" ]; then unset NEXT_PUBLIC_API_URL; fi \
   && npm run build
 
