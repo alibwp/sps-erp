@@ -37,6 +37,7 @@ docker compose logs -f backend
 docker compose exec backend npm test
 docker compose exec backend npm run test:e2e
 docker compose exec backend npm run lint
+docker compose exec backend npm run typecheck
 docker compose exec frontend npm run lint
 docker compose exec frontend npm run typecheck
 ```

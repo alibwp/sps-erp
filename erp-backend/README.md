@@ -28,6 +28,7 @@ npm run start:dev             # http://localhost:5000/api
 | `npm run start:dev`| Start with live reload               |
 | `npm run build`    | Compile to `dist/`                   |
 | `npm run lint`     | Lint `src/` and `test/`              |
+| `npm run typecheck`| TypeScript check, including tests    |
 | `npm test`         | Unit tests                           |
 | `npm run test:e2e` | End-to-end tests (needs the database)|
 

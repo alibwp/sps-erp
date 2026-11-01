@@ -1,14 +1,13 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { INestApplication } from '@nestjs/common';
 import request from 'supertest';
-import { App } from 'supertest/types';
 import { AppModule } from './../src/app.module.js';
 import { setupApp } from './../src/setup-app.js';
 
 // Needs a reachable PostgreSQL at DATABASE_URL. Easiest is inside Docker:
 // `docker compose exec backend npm run test:e2e` from the sps-erp folder.
 describe('AppController (e2e)', () => {
-  let app: INestApplication<App>;
+  let app: INestApplication;
 
   beforeEach(async () => {
     const moduleFixture: TestingModule = await Test.createTestingModule({
