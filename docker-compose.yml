@@ -1,0 +1,90 @@
+# SPS ERP - development stack
+#
+#   docker compose up            start database + backend + frontend
+#   docker compose up --watch    same, plus live reload when you edit code
+#   docker compose down          stop everything (database data is kept)
+#   docker compose down -v       stop and DELETE the local database data
+#
+# Frontend  http://localhost:3000
+# Backend   http://localhost:5000              (server status message)
+#           http://localhost:5000/api          (same message)
+#           http://localhost:5000/api/health   (server + database health)
+# Postgres  localhost:5433 (inside Docker: db:5432)
+#
+# Works with no .env file. Every ${VAR:-default} below can be overridden in a
+# .env file next to this one, including switching to the live database
+# (see .env.example and README.md).
+
+name: sps-erp
+
+services:
+  db:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-sps}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-sps_password}
+      POSTGRES_DB: ${POSTGRES_DB:-sps_erp}
+    ports:
+      - "${POSTGRES_PORT:-5433}:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    build:
+      context: ./erp-backend
+      target: dev
+    restart: unless-stopped
+    environment:
+      NODE_ENV: development
+      PORT: 5000
+      # Default: the "db" service above. Set DATABASE_URL in .env to use another database.
+      DATABASE_URL: ${DATABASE_URL:-postgresql://${POSTGRES_USER:-sps}:${POSTGRES_PASSWORD:-sps_password}@db:5432/${POSTGRES_DB:-sps_erp}}
+      DB_SSL: ${DB_SSL:-false}
+      DB_SSL_REJECT_UNAUTHORIZED: ${DB_SSL_REJECT_UNAUTHORIZED:-true}
+      # Never true against the live database (the backend also refuses it for non-local hosts).
+      DB_SYNCHRONIZE: ${DB_SYNCHRONIZE:-true}
+      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:${FRONTEND_PORT:-3000},http://127.0.0.1:${FRONTEND_PORT:-3000}}
+    ports:
+      - "${BACKEND_PORT:-5000}:5000"
+    depends_on:
+      db:
+        condition: service_healthy
+    develop:
+      watch:
+        - action: sync
+          path: ./erp-backend/src
+          target: /app/src
+        - action: rebuild
+          path: ./erp-backend/package.json
+
+  frontend:
+    build:
+      context: ./erp-frontend
+      target: dev
+    restart: unless-stopped
+    environment:
+      # The browser on your machine calls the backend through its published port.
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:${BACKEND_PORT:-5000}/api}
+    ports:
+      - "${FRONTEND_PORT:-3000}:3000"
+    depends_on:
+      - backend
+    develop:
+      watch:
+        - action: sync
+          path: ./erp-frontend
+          target: /app
+          ignore:
+            - node_modules/
+            - .next/
+        - action: rebuild
+          path: ./erp-frontend/package.json
+
+volumes:
+  postgres-data:

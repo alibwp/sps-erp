@@ -1,0 +1,8 @@
+node_modules
+dist
+coverage
+.git
+*.log
+# Secrets are passed in at runtime, never baked into the image.
+.env
+.env.*
