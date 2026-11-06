@@ -15,12 +15,6 @@ export const SCHOOL = {
   phone: "+92 51 555 0142",
 };
 
-export const CURRENT_USER = {
-  name: "Azeem Abbasi",
-  email: "admin@spsarmyschool.edu.pk",
-  role: "Super admin",
-};
-
 export function createRandom(seed: number) {
   let state = seed >>> 0 || 1;
   const next = () => {

@@ -14,7 +14,8 @@ import {
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
 import { Avatar, Kbd } from "@/components/ui/misc";
-import { CURRENT_USER, SCHOOL } from "@/lib/mock";
+import { signOut, useSession } from "@/components/auth/session";
+import { SCHOOL } from "@/lib/mock";
 import { cn } from "@/lib/utils";
 
 function subscribeFullscreen(callback: () => void) {
@@ -26,6 +27,7 @@ export function Header() {
   const router = useRouter();
   const theme = useTheme();
   const { toggle, setCommandOpen } = useSidebar();
+  const { role: user } = useSession();
   const fullscreen = useSyncExternalStore(subscribeFullscreen, () => document.fullscreenElement !== null, () => false);
 
   const themes = [
@@ -104,8 +106,8 @@ export function Header() {
         <DropdownMenu
           trigger={
             <>
-              <Avatar name={CURRENT_USER.name} size="sm" />
-              <span className="hidden max-w-40 truncate text-left text-sm font-medium lg:block">{CURRENT_USER.name}</span>
+              <Avatar name={user.name} size="sm" />
+              <span className="hidden max-w-40 truncate text-left text-sm font-medium lg:block">{user.name}</span>
               <ChevronDown className="size-3.5 text-muted-foreground" />
             </>
           }
@@ -114,8 +116,9 @@ export function Header() {
           className="w-72"
         >
           <div className="border-b p-3">
-            <p className="font-medium">{CURRENT_USER.name}</p>
-            <p className="text-xs text-muted-foreground">{CURRENT_USER.email}</p>
+            <p className="font-medium">{user.name}</p>
+            <p className="text-xs text-muted-foreground">{user.email}</p>
+            <p className="mt-1 text-xs font-medium text-muted-foreground">{user.label}</p>
           </div>
           <DropdownMenuLabel>
             Academic year: {SCHOOL.academicYear}
@@ -126,7 +129,12 @@ export function Header() {
           <DropdownMenuLink href="/profile">
             <UserRound /> Profile
           </DropdownMenuLink>
-          <DropdownMenuItem onClick={() => router.push("/login")}>
+          <DropdownMenuItem
+            onClick={() => {
+              signOut();
+              router.push("/login");
+            }}
+          >
             <LogOut /> Log out
           </DropdownMenuItem>
         </DropdownMenu>

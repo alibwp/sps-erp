@@ -5,14 +5,15 @@ import { ArrowRight, CornerDownLeft, Search } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
 import { useSidebar } from "@/components/layout/sidebar-context";
 import { Kbd } from "@/components/ui/misc";
-import { commandItems } from "@/lib/nav";
+import { useSession } from "@/components/auth/session";
+import { commandItemsFor, type CommandItem } from "@/lib/nav";
+import type { RoleId } from "@/lib/roles";
 import { cn } from "@/lib/utils";
 
-const ITEMS = [
-  ...commandItems,
-  { label: "Profile", href: "/profile", group: "Account" },
-  { label: "Activity logs", href: "/activity-logs", group: "System" },
-].filter((item, index, all) => all.findIndex((other) => other.href === item.href) === index);
+/** The pages the signed-in role can open, plus their own profile. */
+function itemsFor(role: RoleId): CommandItem[] {
+  return [...commandItemsFor(role), { label: "Profile", href: "/profile", group: "Account" }];
+}
 
 /** Ctrl/⌘ K search across every page, as in the reference. */
 export function CommandPalette() {
@@ -48,12 +49,14 @@ function Palette({ onClose, onSelect }: { onClose: () => void; onSelect: (href: 
   const [selected, setSelected] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
+  const { role } = useSession();
+  const items = useMemo(() => itemsFor(role.id), [role.id]);
 
   const results = useMemo(() => {
     const needle = query.trim().toLowerCase();
-    if (!needle) return ITEMS;
-    return ITEMS.filter((item) => `${item.label} ${item.group}`.toLowerCase().includes(needle));
-  }, [query]);
+    if (!needle) return items;
+    return items.filter((item) => `${item.label} ${item.group}`.toLowerCase().includes(needle));
+  }, [items, query]);
 
   useEffect(() => {
     inputRef.current?.focus();

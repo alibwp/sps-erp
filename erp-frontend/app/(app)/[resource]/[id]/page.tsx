@@ -5,6 +5,7 @@ import { Page } from "@/components/layout/page-header";
 import { ResourceDetail } from "@/components/resource/resource-detail";
 import { PrintButton } from "@/components/screens/print-button";
 import { ButtonLink } from "@/components/ui/button";
+import { IfCanChange } from "@/components/layout/role-guard";
 import { getResource, getRow, resources, rowTitle } from "@/lib/resources";
 
 type Props = { params: Promise<{ resource: string; id: string }> };
@@ -37,9 +38,11 @@ export default async function ResourceShowPage({ params }: Props) {
         <>
           {printable && <PrintButton />}
           {resource.form && (
-            <ButtonLink href={`/${resource.slug}/${row.id}/edit`} variant="outline">
-              <Pencil /> Edit
-            </ButtonLink>
+            <IfCanChange href={`/${resource.slug}`}>
+              <ButtonLink href={`/${resource.slug}/${row.id}/edit`} variant="outline">
+                <Pencil /> Edit
+              </ButtonLink>
+            </IfCanChange>
           )}
         </>
       }

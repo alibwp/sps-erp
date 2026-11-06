@@ -7,6 +7,8 @@ import { useState, type FormEvent, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { Field, Input } from "@/components/ui/form";
 import { Alert } from "@/components/ui/misc";
+import { signIn } from "@/components/auth/session";
+import { ROLES, roleForEmail } from "@/lib/roles";
 
 // Sign-in screens. None of them reach the backend yet: each form shows the
 // state it would show after a successful request, so the flow can be walked.
@@ -49,24 +51,20 @@ function PasswordInput({ id, name, autoComplete }: { id: string; name: string; a
   );
 }
 
-// The same seven roles the reference's sign-in page offers.
-const DEMO_ACCOUNTS = [
-  ["Platform administrator", "admin@spsarmyschool.edu.pk"],
-  ["School administrator", "adil@spsarmyschool.edu.pk"],
-  ["Teacher", "teacher@spsarmyschool.edu.pk"],
-  ["Student", "student@students.sps.edu.pk"],
-  ["Parent", "parent@gmail.com"],
-  ["Accountant", "kamran@spsarmyschool.edu.pk"],
-  ["Librarian", "nida@spsarmyschool.edu.pk"],
-] as const;
-
 export function LoginForm() {
   const router = useRouter();
   const { submitting, submit } = useSubmit(() => router.push("/dashboard"));
 
   return (
     <div className="space-y-6">
-      <form onSubmit={submit} className="grid gap-5">
+      <form
+        onSubmit={(event) => {
+          // The demo account's role decides which dashboard opens.
+          signIn(roleForEmail(String(new FormData(event.currentTarget).get("email") ?? "")));
+          submit(event);
+        }}
+        className="grid gap-5"
+      >
         <Field label="Email address" htmlFor="email">
           <Input id="email" name="email" type="email" autoComplete="email" autoFocus required placeholder="you@spsarmyschool.edu.pk" />
         </Field>
@@ -86,13 +84,13 @@ export function LoginForm() {
             Try the demo as
           </h2>
           <p className="text-sm text-muted-foreground">
-            Sign-in is not connected to the backend yet, so any account opens the dashboard.
+            Sign-in is not connected to the backend yet. Each role opens its own dashboard.
           </p>
         </div>
         <div className="grid grid-cols-2 gap-2">
-          {DEMO_ACCOUNTS.map(([role, email]) => (
+          {ROLES.map(({ id, label, email }) => (
             <Button
-              key={role}
+              key={id}
               variant="outline"
               className="h-auto min-h-11 whitespace-normal py-2 text-center"
               disabled={submitting}
@@ -106,7 +104,7 @@ export function LoginForm() {
                 emailInput.form?.requestSubmit();
               }}
             >
-              {role}
+              {label}
             </Button>
           ))}
         </div>

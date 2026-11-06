@@ -7,7 +7,7 @@ import { ConfirmDialog } from "@/components/ui/dialog";
 import { Field, Input } from "@/components/ui/form";
 import { Avatar } from "@/components/ui/misc";
 import { useToast } from "@/components/ui/toast";
-import { CURRENT_USER } from "@/lib/mock";
+import { useSession } from "@/components/auth/session";
 
 /** Two-column section: description on the left, form on the right. */
 function FormSection({ title, description, children }: { title: string; description: string; children: ReactNode }) {
@@ -37,13 +37,14 @@ export function ProfileForms() {
   const [confirmDelete, setConfirmDelete] = useState(false);
   const saveProfile = useSaved("Profile saved");
   const savePassword = useSaved("Password updated");
+  const { role: user } = useSession();
 
   return (
     <div className="grid max-w-5xl gap-10">
       <FormSection title="Profile information" description="Update your account's profile information and email address.">
-        <form onSubmit={saveProfile} className="grid gap-5 sm:grid-cols-2">
+        <form key={user.id} onSubmit={saveProfile} className="grid gap-5 sm:grid-cols-2">
           <div className="flex items-center gap-4 sm:col-span-2">
-            <Avatar name={CURRENT_USER.name} size="xl" />
+            <Avatar name={user.name} size="xl" />
             <div className="grid gap-2">
               <label htmlFor="photo" className="text-sm text-muted-foreground">
                 Photo
@@ -52,16 +53,16 @@ export function ProfileForms() {
             </div>
           </div>
           <Field label="Name" htmlFor="name">
-            <Input id="name" defaultValue={CURRENT_USER.name} required />
+            <Input id="name" defaultValue={user.name} required />
           </Field>
           <Field label="Email" htmlFor="email">
-            <Input id="email" type="email" defaultValue={CURRENT_USER.email} required />
+            <Input id="email" type="email" defaultValue={user.email} required />
           </Field>
           <Field label="Phone" htmlFor="phone">
             <Input id="phone" type="tel" defaultValue="+92 300 5551234" />
           </Field>
           <Field label="Role" htmlFor="role">
-            <Input id="role" defaultValue={CURRENT_USER.role} readOnly className="bg-muted/50" />
+            <Input id="role" value={user.label} readOnly className="bg-muted/50" />
           </Field>
           <div className="sm:col-span-2">
             <Button type="submit">Save</Button>

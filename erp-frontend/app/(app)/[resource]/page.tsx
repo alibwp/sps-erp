@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { Plus } from "lucide-react";
 import { Page } from "@/components/layout/page-header";
+import { IfCanChange } from "@/components/layout/role-guard";
 import { ResourceTable } from "@/components/resource/data-table";
 import { CalendarMonth } from "@/components/screens/calendar-month";
 import { ButtonLink } from "@/components/ui/button";
@@ -29,9 +30,11 @@ export default async function ResourceListPage({ params }: Props) {
       breadcrumbs={[{ label: resource.title }]}
       actions={
         resource.form && (
-          <ButtonLink href={`/${resource.slug}/create`}>
-            <Plus /> {resource.createLabel ?? `Add ${resource.singular.toLowerCase()}`}
-          </ButtonLink>
+          <IfCanChange href={`/${resource.slug}`}>
+            <ButtonLink href={`/${resource.slug}/create`}>
+              <Plus /> {resource.createLabel ?? `Add ${resource.singular.toLowerCase()}`}
+            </ButtonLink>
+          </IfCanChange>
         )
       }
     >

@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import { CommandPalette } from "@/components/layout/command-palette";
 import { Header } from "@/components/layout/header";
 import { PeriodBar } from "@/components/layout/period-bar";
+import { RoleGuard } from "@/components/layout/role-guard";
 import { Sidebar } from "@/components/layout/sidebar";
 import { SidebarProvider } from "@/components/layout/sidebar-context";
 import { ToastProvider } from "@/components/ui/toast";
@@ -24,7 +25,9 @@ export function AppShell({ children }: { children: ReactNode }) {
           <div className="flex min-w-0 flex-1 flex-col">
             <Header />
             <PeriodBar />
-            <main className="flex min-w-0 flex-1 flex-col">{children}</main>
+            <main className="flex min-w-0 flex-1 flex-col">
+              <RoleGuard>{children}</RoleGuard>
+            </main>
           </div>
         </div>
         <CommandPalette />

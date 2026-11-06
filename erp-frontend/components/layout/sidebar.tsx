@@ -9,8 +9,8 @@ import { useSidebar } from "@/components/layout/sidebar-context";
 import { Select } from "@/components/ui/form";
 import { Avatar } from "@/components/ui/misc";
 import { useToast } from "@/components/ui/toast";
-import { CURRENT_USER, SCHOOL } from "@/lib/mock";
-import { isActive, navigation, type NavItem, type NavLink } from "@/lib/nav";
+import { useSession } from "@/components/auth/session";
+import { isActive, navigationFor, type NavItem, type NavLink } from "@/lib/nav";
 import { cn } from "@/lib/utils";
 
 const CAMPUSES = ["SPS Army School — Main Campus", "SPS Army School — Westridge", "SPS Girls Campus"];
@@ -22,6 +22,7 @@ const linkActive = "bg-sidebar-accent font-medium text-sidebar-accent-foreground
 function SidebarBody({ collapsed, onNavigate }: { collapsed: boolean; onNavigate?: () => void }) {
   const pathname = usePathname();
   const toast = useToast();
+  const { role: user } = useSession();
 
   return (
     <>
@@ -30,7 +31,12 @@ function SidebarBody({ collapsed, onNavigate }: { collapsed: boolean; onNavigate
           <Logo className="size-8" />
           {!collapsed && <span className="truncate text-sm font-semibold">{APP_NAME}</span>}
         </Link>
-        {!collapsed && (
+        {!collapsed && user.id !== "platform-admin" && (
+          // Someone who belongs to one school sees its name; only the platform
+          // administrator, who works across every school, can switch.
+          <span className="truncate px-1 text-xs text-sidebar-foreground/70">{CAMPUSES[0]}</span>
+        )}
+        {!collapsed && user.id === "platform-admin" && (
           <label className="flex min-w-0 flex-col gap-1">
             <span className="px-1 text-xs font-medium text-sidebar-foreground/70">Working school</span>
             <Select
@@ -47,7 +53,7 @@ function SidebarBody({ collapsed, onNavigate }: { collapsed: boolean; onNavigate
       </div>
 
       <nav aria-label="Main" className="beautify-scrollbar min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-2 pb-4">
-        {navigation.map((group) => (
+        {navigationFor(user.id).map((group) => (
           <div key={group.label} className="py-2">
             {collapsed ? (
               <div className="mx-2 mb-2 border-t border-sidebar-border first:hidden" aria-hidden />
@@ -69,14 +75,14 @@ function SidebarBody({ collapsed, onNavigate }: { collapsed: boolean; onNavigate
         <Link
           href="/profile"
           onClick={onNavigate}
-          title={collapsed ? CURRENT_USER.name : undefined}
+          title={collapsed ? user.name : undefined}
           className={cn(linkBase, "h-11", collapsed && "w-10 justify-center px-0", isActive(pathname, "/profile") && linkActive)}
         >
-          <Avatar name={CURRENT_USER.name} size="sm" />
+          <Avatar name={user.name} size="sm" />
           {!collapsed && (
             <span className="min-w-0">
-              <span className="block truncate">{CURRENT_USER.name}</span>
-              <span className="block truncate text-xs text-sidebar-foreground/70">{SCHOOL.name}</span>
+              <span className="block truncate">{user.name}</span>
+              <span className="block truncate text-xs text-sidebar-foreground/70">{user.label}</span>
             </span>
           )}
         </Link>

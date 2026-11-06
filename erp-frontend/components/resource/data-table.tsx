@@ -10,6 +10,8 @@ import { DropdownMenu, DropdownMenuItem, DropdownMenuLink, DropdownMenuSeparator
 import { Input, Select } from "@/components/ui/form";
 import { EmptyState } from "@/components/ui/misc";
 import { useToast } from "@/components/ui/toast";
+import { useSession } from "@/components/auth/session";
+import { canChange } from "@/lib/nav";
 import { getResource, rowTitle, type Column, type Row } from "@/lib/resources";
 import { cn } from "@/lib/utils";
 
@@ -57,6 +59,7 @@ export function ResourceTable({ slug, filter, compact = false }: Props) {
     }
     return result;
   }, [resource, deleted, filter, query, sort]);
+  const { role } = useSession();
 
   if (!resource) return null;
 
@@ -64,7 +67,7 @@ export function ResourceTable({ slug, filter, compact = false }: Props) {
   const currentPage = Math.min(page, pageCount);
   const start = (currentPage - 1) * perPage;
   const pageRows = visibleRows.slice(start, start + perPage);
-  const editable = Boolean(resource.form);
+  const editable = Boolean(resource.form) && canChange(role.id, `/${resource.slug}`);
 
   const toggleSort = (column: Column) => {
     setSort((current) =>
