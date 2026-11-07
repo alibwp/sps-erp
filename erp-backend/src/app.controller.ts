@@ -1,25 +1,20 @@
-import { Controller, Get, ServiceUnavailableException } from '@nestjs/common';
+import { Public } from './identity/auth/auth-context.js';
+import { Controller, Get, VERSION_NEUTRAL } from '@nestjs/common';
+import { ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { AppService } from './app.service.js';
-import type { HealthStatus, ServerStatus } from './app.service.js';
+import type { ServerStatus } from './app.service.js';
 
-@Controller()
+@ApiTags('Health')
+@Public()
+@Controller({ version: VERSION_NEUTRAL })
 export class AppController {
   constructor(private readonly appService: AppService) {}
 
-  // GET /api
-  @Get()
+  // GET / and GET /api. The health check is HealthController (/api/health).
+  @Get(['/', 'api'])
+  @ApiOperation({ summary: 'Server status message' })
+  @ApiOkResponse({ description: 'The server is running' })
   getStatus(): ServerStatus {
     return this.appService.getStatus();
-  }
-
-  // GET /api/health — 503 when the database is unreachable, so load
-  // balancers and uptime monitors can detect it.
-  @Get('health')
-  async getHealth(): Promise<HealthStatus> {
-    const health = await this.appService.getHealth();
-    if (health.database === 'down') {
-      throw new ServiceUnavailableException(health);
-    }
-    return health;
   }
 }
