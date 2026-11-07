@@ -1,6 +1,7 @@
 node_modules
 dist
 coverage
+storage
 .git
 *.log
 # Secrets are passed in at runtime, never baked into the image.

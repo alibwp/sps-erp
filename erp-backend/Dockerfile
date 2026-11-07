@@ -7,6 +7,10 @@ WORKDIR /app
 # Committed copy of https://truststore.pki.rds.amazonaws.com/global/global-bundle.pem
 COPY certs/rds-global-bundle.pem /etc/ssl/certs/rds-global-bundle.pem
 ENV NODE_EXTRA_CA_CERTS=/etc/ssl/certs/rds-global-bundle.pem
+# DNS lookups, file access and password hashing share Node's worker threads
+# (4 by default). While Redis is unreachable its reconnect attempts can hold
+# all four, which would stall new database connections too.
+ENV UV_THREADPOOL_SIZE=16
 
 # ---- Dependencies (installed inside Linux, never copied from Windows) ----
 FROM base AS deps

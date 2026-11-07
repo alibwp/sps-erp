@@ -9,6 +9,9 @@
 /dist
 /tmp
 /out-tsc
+
+# local file storage (STORAGE_DRIVER=local)
+/storage
 /*.tsbuildinfo
 
 # dependencies
