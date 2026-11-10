@@ -1,7 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { API_URL } from "@/lib/api";
+import { cn } from "@/lib/utils";
 
 type Health = {
   server: "up";
@@ -18,6 +20,7 @@ type Tone = "ok" | "bad" | "idle";
 
 const REFRESH_MS = 10_000;
 
+/** Live health of the backend API and its database. */
 export function BackendStatus() {
   const [status, setStatus] = useState<Status>({ kind: "checking" });
 
@@ -59,51 +62,41 @@ export function BackendStatus() {
       : { tone: "idle", label: status.kind === "checking" ? "Checking…" : "Unknown" };
 
   return (
-    <div className="rounded-xl border border-black/10 p-6 dark:border-white/10">
-      <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <h2 className="text-lg font-semibold tracking-tight">System status</h2>
+    <Card>
+      <CardHeader className="flex-row flex-wrap items-baseline justify-between gap-2 border-b">
+        <CardTitle className="text-base">System status</CardTitle>
         {status.kind !== "checking" && (
-          <span className="text-xs text-zinc-500">
-            Last checked {status.checkedAt.toLocaleTimeString()} · refreshes
-            every {REFRESH_MS / 1000}s
+          <span className="text-xs text-muted-foreground">
+            Last checked {status.checkedAt.toLocaleTimeString()} · refreshes every {REFRESH_MS / 1000}s
           </span>
         )}
-      </div>
-      <dl className="mt-4 divide-y divide-black/10 dark:divide-white/10">
-        <StatusRow name="Backend API" {...server} />
-        <StatusRow name="Database" {...database} />
-        <div className="flex flex-wrap items-center justify-between gap-2 py-3 text-sm">
-          <dt className="text-zinc-600 dark:text-zinc-400">API URL</dt>
-          <dd className="font-mono text-xs break-all">{API_URL}</dd>
-        </div>
-      </dl>
-    </div>
+      </CardHeader>
+      <CardContent className="pt-2">
+        <dl className="divide-y">
+          <StatusRow name="Backend API" {...server} />
+          <StatusRow name="Database" {...database} />
+          <div className="flex flex-wrap items-center justify-between gap-2 py-3 text-sm">
+            <dt className="text-muted-foreground">API URL</dt>
+            <dd className="break-all font-mono text-xs">{API_URL}</dd>
+          </div>
+        </dl>
+      </CardContent>
+    </Card>
   );
 }
 
 const toneClasses: Record<Tone, string> = {
-  ok: "bg-emerald-500",
-  bad: "bg-red-500",
-  idle: "bg-zinc-400",
+  ok: "bg-success",
+  bad: "bg-destructive",
+  idle: "bg-muted-foreground/50",
 };
 
-function StatusRow({
-  name,
-  tone,
-  label,
-}: {
-  name: string;
-  tone: Tone;
-  label: string;
-}) {
+function StatusRow({ name, tone, label }: { name: string; tone: Tone; label: string }) {
   return (
     <div className="flex items-center justify-between py-3 text-sm">
-      <dt className="text-zinc-600 dark:text-zinc-400">{name}</dt>
+      <dt className="text-muted-foreground">{name}</dt>
       <dd className="flex items-center gap-2 font-medium">
-        <span
-          className={`size-2 rounded-full ${toneClasses[tone]}`}
-          aria-hidden
-        />
+        <span className={cn("size-2 rounded-full", toneClasses[tone])} aria-hidden />
         {label}
       </dd>
     </div>

@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
-import { Navbar } from "@/components/navbar";
+import { themeScript } from "@/components/layout/theme";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -18,22 +18,18 @@ export const metadata: Metadata = {
     default: "SPS ERP",
     template: "%s | SPS ERP",
   },
-  description: "SPS ERP - enterprise resource planning for your business.",
+  description: "SPS ERP — school management for SPS Army School.",
+  robots: { index: false, follow: false },
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
-    <html
-      lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
-    >
-      <body className="min-h-full flex flex-col">
-        <Navbar />
-        {children}
-        <footer className="border-t border-black/10 py-6 text-center text-sm text-zinc-500 dark:border-white/10">
-          SPS ERP · Enterprise Resource Planning
-        </footer>
-      </body>
+    // The theme script sets the `dark` class before React hydrates.
+    <html lang="en" className={`${geistSans.variable} ${geistMono.variable} scroll-smooth antialiased`} suppressHydrationWarning>
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: themeScript }} />
+      </head>
+      <body className="min-h-screen bg-background font-sans text-foreground">{children}</body>
     </html>
   );
 }
