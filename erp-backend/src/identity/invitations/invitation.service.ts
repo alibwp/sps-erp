@@ -158,21 +158,31 @@ export class InvitationService {
     return this.transactions.run(async (tx) => {
       const user = await tx.lockOne(User, { id: userId });
       if (!user) throw new NotFoundException('Account not found.');
-      const revoked = await this.revokePending(
-        tx.manager,
-        user.id,
-        this.clock.now(),
-      );
-      if (revoked > 0) {
-        await this.audit.record(tx.manager, {
-          action: AuditAction.AccountInvitationRevoked,
-          subject: { type: AUDIT_SUBJECT.user, id: user.id },
-          context: { revoked_count: revoked, email: user.email },
-          ...(revokedById !== undefined ? { actorId: revokedById } : {}),
-        });
-      }
-      return revoked;
+      return this.revokeIn(tx.manager, user, revokedById);
     });
+  }
+
+  // The same inside the caller's transaction, for a caller that already
+  // holds the account (suspending or archiving it).
+  async revokeIn(
+    manager: EntityManager,
+    user: User,
+    revokedById?: string | null,
+  ): Promise<number> {
+    const revoked = await this.revokePending(
+      manager,
+      user.id,
+      this.clock.now(),
+    );
+    if (revoked > 0) {
+      await this.audit.record(manager, {
+        action: AuditAction.AccountInvitationRevoked,
+        subject: { type: AUDIT_SUBJECT.user, id: user.id },
+        context: { revoked_count: revoked, email: user.email },
+        ...(revokedById !== undefined ? { actorId: revokedById } : {}),
+      });
+    }
+    return revoked;
   }
 
   // Hourly: expired links are marked revoked, as the reference's
