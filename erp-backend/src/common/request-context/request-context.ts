@@ -3,11 +3,13 @@ import { Injectable, NestMiddleware } from '@nestjs/common';
 import type { NextFunction, Request, Response } from 'express';
 
 // What the code handling a request may need without passing it down every
-// call: who is signed in and where the request came from (for the audit
-// log). Outside a request (jobs, CLI) there is no context.
+// call: who is signed in, where the request came from (for the audit log)
+// and the working campus of a campus route (X-School-Id, once checked).
+// Outside a request (jobs, CLI) there is no context.
 export interface RequestContext {
   ipAddress: string | null;
   userId: string | null;
+  schoolId: string | null;
 }
 
 const storage = new AsyncLocalStorage<RequestContext>();
@@ -27,6 +29,9 @@ export function runWithRequestContext<T>(
 @Injectable()
 export class RequestContextMiddleware implements NestMiddleware {
   use(req: Request, _res: Response, next: NextFunction): void {
-    storage.run({ ipAddress: req.ip ?? null, userId: null }, next);
+    storage.run(
+      { ipAddress: req.ip ?? null, userId: null, schoolId: null },
+      next,
+    );
   }
 }
