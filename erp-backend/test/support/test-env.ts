@@ -4,6 +4,11 @@ import { join } from 'node:path';
 // The Redis database e2e tests use. Never 0, which development uses.
 const TEST_REDIS_DB = '15';
 
+// The frontend address in e2e runs: links in emails point here, and it is
+// the one allowed CORS origin, so tests do not depend on the CORS_ORIGIN or
+// FRONTEND_PORT of the machine running them.
+export const TEST_FRONTEND_ORIGIN = 'http://frontend.test';
+
 // Settings for e2e runs. The database is DATABASE_URL's with "_test" added
 // (sps_erp -> sps_erp_test) unless TEST_DATABASE_URL names one; Redis is
 // database 15 of REDIS_URL unless TEST_REDIS_URL names one. A database
@@ -50,7 +55,8 @@ export function testEnvironment(
     OPENAPI_ENABLED: 'true',
     JWT_SECRET: 'e2e-jwt-secret-at-least-thirty-two-characters',
     APP_KEY: `base64:${Buffer.alloc(32, 42).toString('base64')}`,
-    FRONTEND_URL: 'http://frontend.test',
+    FRONTEND_URL: TEST_FRONTEND_ORIGIN,
+    CORS_ORIGIN: TEST_FRONTEND_ORIGIN,
     CHECK_EMAIL_DOMAINS: 'false',
     // Tests give each client its own X-Forwarded-For address (support/identity.ts).
     TRUST_PROXY: '1',

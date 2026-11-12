@@ -1,8 +1,10 @@
 import { ConfigService } from '@nestjs/config';
 import { Redis } from 'ioredis';
 import pg from 'pg';
-import { DataSource } from 'typeorm';
+import { DataSource, type QueryRunner } from 'typeorm';
 import { postgresOptions } from '../../src/database/database.module.js';
+import { SeedPermissions1794140000001 } from '../../src/database/migrations/1794140000001-SeedPermissions.js';
+import { SeedWeekdays1794150000001 } from '../../src/database/migrations/1794150000001-SeedWeekdays.js';
 import { redisOptions } from '../../src/redis/redis.module.js';
 
 function databaseName(): string {
@@ -52,7 +54,16 @@ export async function rebuildSchema(): Promise<void> {
   }
 }
 
-// Empties every table except the migration history.
+// Migrations that only insert reference data. Emptying the tables removes
+// that data too, so it is put back after every truncate, as a fresh
+// database would have it.
+const SEED_MIGRATIONS = [
+  new SeedPermissions1794140000001(),
+  new SeedWeekdays1794150000001(),
+];
+
+// Empties every table except the migration history, then restores the
+// seeded reference data (permissions, built-in roles, weekdays).
 export async function truncateAllTables(): Promise<void> {
   const client = new pg.Client({ connectionString: process.env.DATABASE_URL });
   databaseName();
@@ -67,6 +78,12 @@ export async function truncateAllTables(): Promise<void> {
         .join(', ');
       await client.query(`TRUNCATE ${tables} RESTART IDENTITY CASCADE`);
     }
+    // The seed migrations only call query(), so a thin runner is enough.
+    const runner = {
+      query: async (sql: string, parameters?: unknown[]) =>
+        (await client.query(sql, parameters)).rows,
+    } as unknown as QueryRunner;
+    for (const seed of SEED_MIGRATIONS) await seed.up(runner);
   } finally {
     await client.end();
   }
