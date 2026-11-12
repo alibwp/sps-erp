@@ -1,15 +1,18 @@
 # SPS ERP - development stack
 #
-#   docker compose up            start database + backend + frontend
+#   docker compose up            start database, Redis, Mailpit, backend, frontend
 #   docker compose up --watch    same, plus live reload when you edit code
 #   docker compose down          stop everything (database data is kept)
-#   docker compose down -v       stop and DELETE the local database data
+#   docker compose down -v       stop and DELETE the local database data and files
 #
 # Frontend  http://localhost:3000
 # Backend   http://localhost:5000              (server status message)
 #           http://localhost:5000/api          (same message)
-#           http://localhost:5000/api/health   (server + database health)
+#           http://localhost:5000/api/health   (database, Redis, queue, storage, scheduler)
+#           http://localhost:5000/api/docs     (API reference)
+# Mailpit   http://localhost:8025              (emails the backend sends)
 # Postgres  localhost:5433 (inside Docker: db:5432)
+# Redis     inside Docker only: redis:6379
 #
 # Works with no .env file. Every ${VAR:-default} below can be overridden in a
 # .env file next to this one, including switching to the live database
@@ -35,6 +38,23 @@ services:
       timeout: 5s
       retries: 10
 
+  # Background jobs and schedules (BullMQ). No host port: only the backend uses it.
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # Catches every email the backend sends; read them in the browser.
+  mailpit:
+    image: axllent/mailpit:v1.28
+    restart: unless-stopped
+    ports:
+      - "${MAILPIT_PORT:-8025}:8025"
+
   backend:
     build:
       context: ./erp-backend
@@ -47,14 +67,36 @@ services:
       DATABASE_URL: ${DATABASE_URL:-postgresql://${POSTGRES_USER:-sps}:${POSTGRES_PASSWORD:-sps_password}@db:5432/${POSTGRES_DB:-sps_erp}}
       DB_SSL: ${DB_SSL:-false}
       DB_SSL_REJECT_UNAUTHORIZED: ${DB_SSL_REJECT_UNAUTHORIZED:-true}
+      # Tables come from migrations, applied when the backend starts.
       # Never true against the live database (the backend also refuses it for non-local hosts).
-      DB_SYNCHRONIZE: ${DB_SYNCHRONIZE:-true}
+      DB_SYNCHRONIZE: ${DB_SYNCHRONIZE:-false}
       CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:${FRONTEND_PORT:-3000},http://127.0.0.1:${FRONTEND_PORT:-3000}}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379}
+      SMTP_HOST: ${SMTP_HOST:-mailpit}
+      SMTP_PORT: ${SMTP_PORT:-1025}
+      MAIL_FROM: ${MAIL_FROM:-SPS ERP <no-reply@sps-erp.test>}
+      STORAGE_DRIVER: local
+      STORAGE_LOCAL_ROOT: /app/storage
+      STORAGE_SIGNING_SECRET: ${STORAGE_SIGNING_SECRET:-local-development-signing-secret}
+      APP_URL: http://localhost:${BACKEND_PORT:-5000}
+      # Sign-in. Development values only; production refuses them.
+      JWT_SECRET: ${JWT_SECRET:-local-development-jwt-secret-not-for-production}
+      APP_KEY: ${APP_KEY:-base64:c3BzLWVycC1sb2NhbC1kZXYtYXBwLWtleS0wMDAwMDA=}
+      # Where links in emails point (invitation, password reset, verification).
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:${FRONTEND_PORT:-3000}}
+      ACCOUNT_INVITATION_EXPIRY_HOURS: ${ACCOUNT_INVITATION_EXPIRY_HOURS:-72}
+      CHECK_EMAIL_DOMAINS: ${CHECK_EMAIL_DOMAINS:-true}
     ports:
       - "${BACKEND_PORT:-5000}:5000"
+    volumes:
+      - backend-storage:/app/storage
     depends_on:
       db:
         condition: service_healthy
+      redis:
+        condition: service_healthy
+      mailpit:
+        condition: service_started
     develop:
       watch:
         - action: sync
@@ -88,3 +130,4 @@ services:
 
 volumes:
   postgres-data:
+  backend-storage:
