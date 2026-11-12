@@ -2,6 +2,9 @@ import { getQueueToken } from '@nestjs/bullmq';
 import { QUEUES } from '../queue/queue.module.js';
 import { MaintenanceProcessor } from './maintenance.processor.js';
 import {
+  ACADEMIC_CALENDAR_REMINDERS_JOB,
+  GENERATE_ACADEMIC_CYCLES_JOB,
+  OPEN_ACADEMIC_PERIODS_JOB,
   PRUNE_INVITATIONS_JOB,
   QUEUE_HEARTBEAT_JOB,
   SCHEDULED_JOBS,
@@ -190,12 +193,18 @@ describe('SchedulerService', () => {
 
 describe('MaintenanceProcessor', () => {
   const identity = { pruneExpired: vi.fn().mockResolvedValue({}) };
+  const calendar = {
+    openDue: vi.fn().mockResolvedValue({ opened: 0, skipped: 0 }),
+    generateUpcoming: vi.fn().mockResolvedValue(0),
+    sendReminders: vi.fn().mockResolvedValue(0),
+  };
 
   it('records the queue heartbeat when a worker takes the heartbeat job', async () => {
     const heartbeats = { record: vi.fn().mockResolvedValue(undefined) };
     await new MaintenanceProcessor(
       heartbeats as never,
       identity as never,
+      calendar as never,
     ).process({
       name: QUEUE_HEARTBEAT_JOB,
     } as never);
@@ -207,6 +216,7 @@ describe('MaintenanceProcessor', () => {
     await new MaintenanceProcessor(
       heartbeats as never,
       identity as never,
+      calendar as never,
     ).process({
       name: 'other',
     } as never);
@@ -217,9 +227,23 @@ describe('MaintenanceProcessor', () => {
     await new MaintenanceProcessor(
       { record: vi.fn() } as never,
       identity as never,
+      calendar as never,
     ).process({
       name: PRUNE_INVITATIONS_JOB,
     } as never);
     expect(identity.pruneExpired).toHaveBeenCalledOnce();
+  });
+
+  it.each([
+    [OPEN_ACADEMIC_PERIODS_JOB, 'openDue'],
+    [GENERATE_ACADEMIC_CYCLES_JOB, 'generateUpcoming'],
+    [ACADEMIC_CALENDAR_REMINDERS_JOB, 'sendReminders'],
+  ] as const)('runs the calendar job %s', async (name, method) => {
+    await new MaintenanceProcessor(
+      { record: vi.fn() } as never,
+      identity as never,
+      calendar as never,
+    ).process({ name } as never);
+    expect(calendar[method]).toHaveBeenCalledOnce();
   });
 });
