@@ -111,8 +111,9 @@ services:
       target: dev
     restart: unless-stopped
     environment:
-      # The browser on your machine calls the backend through its published port.
-      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:${BACKEND_PORT:-5000}/api}
+      # The browser calls this site's /api; the Next.js server passes those
+      # calls to the backend container.
+      BACKEND_URL: http://backend:5000
     ports:
       - "${FRONTEND_PORT:-3000}:3000"
     depends_on:
