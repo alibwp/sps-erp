@@ -12,6 +12,8 @@ import { testDataSource } from './support/test-database.js';
 import { waitFor } from './support/test-app.js';
 
 const message = { to: 'parent@school.test', subject: 'Reset', text: 'Link' };
+// No demo accounts: MailService queues every message.
+const users = { query: () => Promise.resolve([]) } as unknown as DataSource;
 
 // A TCP proxy in front of the test Redis, so a test can take Redis away
 // from one connection and bring it back.
@@ -76,7 +78,9 @@ describe('Queueing while Redis is down (e2e)', () => {
       }),
     );
 
-    const { error, ms } = await timed(new MailService(queue).send(message));
+    const { error, ms } = await timed(
+      new MailService(queue, users).send(message),
+    );
 
     expect(error).toBeInstanceOf(QueueUnavailable);
     expect(ms).toBeLessThan(2000);
@@ -99,7 +103,9 @@ describe('Queueing while Redis is down (e2e)', () => {
       }),
     );
 
-    const { error, ms } = await timed(new MailService(queue).send(message));
+    const { error, ms } = await timed(
+      new MailService(queue, users).send(message),
+    );
     expect(error).toBeInstanceOf(QueueUnavailable);
     expect(ms).toBeLessThan(2000);
 
@@ -128,7 +134,7 @@ describe('Queueing while Redis is down (e2e)', () => {
         retryStrategy: () => 200,
       }),
     );
-    const mail = new MailService(queue);
+    const mail = new MailService(queue, users);
     const client = await queue.client;
 
     expect(await mail.send(message)).toBeTruthy();
@@ -171,7 +177,7 @@ describe('Queueing while Redis is down (e2e)', () => {
           retryStrategy: () => 1000,
         }),
       );
-      const mail = new MailService(queue);
+      const mail = new MailService(queue, users);
       const logged = vi
         .spyOn(Logger.prototype, 'error')
         .mockImplementation(() => undefined);
