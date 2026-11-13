@@ -1,8 +1,5 @@
-// The roles someone can sign in as, with the demo account for each. Sign-in
-// is not connected to the backend yet, so the role picked at login decides
-// which dashboard and identity the app shows.
-
-import { PARENT_NAMES, STUDENT_NAMES, TEACHER_NAMES } from "@/lib/mock";
+// The dashboards the app has, and how a person's roles at their campus pick
+// one. The roles come from the backend (GET /api/v1/me/permissions).
 
 export type RoleId =
   | "platform-admin"
@@ -13,41 +10,36 @@ export type RoleId =
   | "accountant"
   | "librarian";
 
+/** The signed-in person as the app shows them. */
 export type Role = {
   id: RoleId;
   label: string;
-  /** The demo person signed in under this role. */
   name: string;
   email: string;
 };
 
-const plainName = (name: string) => name.replace(/^(Mr|Ms|Mrs|Dr)\.\s+/, "");
-
-export const ROLES: Role[] = [
-  { id: "platform-admin", label: "Platform administrator", name: "Azeem Abbasi", email: "admin@spsarmyschool.edu.pk" },
-  { id: "school-admin", label: "School administrator", name: "Adil Mehmood", email: "adil@spsarmyschool.edu.pk" },
-  { id: "teacher", label: "Teacher", name: plainName(TEACHER_NAMES[0]), email: "teacher@spsarmyschool.edu.pk" },
-  { id: "student", label: "Student", name: STUDENT_NAMES[0], email: "student@students.sps.edu.pk" },
-  { id: "parent", label: "Parent", name: PARENT_NAMES[0], email: "parent@gmail.com" },
-  { id: "accountant", label: "Accountant", name: "Kamran Butt", email: "kamran@spsarmyschool.edu.pk" },
-  { id: "librarian", label: "Librarian", name: "Nida Farooq", email: "nida@spsarmyschool.edu.pk" },
+// Backend role names, strongest first: a person holding several sees the
+// dashboard of the first one they hold. The organization administrator has
+// no dashboard of their own yet and sees the school administrator's.
+const BY_PRIORITY: ReadonlyArray<{ name: string; id: RoleId; label: string }> = [
+  { name: "platform-admin", id: "platform-admin", label: "Platform administrator" },
+  { name: "organization-admin", id: "school-admin", label: "Organization administrator" },
+  { name: "admin", id: "school-admin", label: "School administrator" },
+  { name: "accountant", id: "accountant", label: "Accountant" },
+  { name: "librarian", id: "librarian", label: "Librarian" },
+  { name: "teacher", id: "teacher", label: "Teacher" },
+  { name: "parent", id: "parent", label: "Parent" },
+  { name: "student", id: "student", label: "Student" },
 ];
 
-/** Who the app shows when nobody has signed in yet. */
-export const DEFAULT_ROLE: RoleId = "platform-admin";
-
-const byId = new Map(ROLES.map((role) => [role.id, role]));
-
-export function isRoleId(value: unknown): value is RoleId {
-  return typeof value === "string" && byId.has(value as RoleId);
-}
-
-export function getRole(id: RoleId): Role {
-  return byId.get(id) ?? byId.get(DEFAULT_ROLE)!;
-}
-
-/** The role of a demo account, or the default for any other address. */
-export function roleForEmail(email: string): RoleId {
-  const match = ROLES.find((role) => role.email === email.trim().toLowerCase());
-  return match?.id ?? DEFAULT_ROLE;
+/**
+ * The dashboard for a person's backend roles, and what to call them. Someone
+ * holding none of these (a campus's own role, or no campus yet) sees the
+ * teacher's dashboard, the plainest staff view, under the name of what they
+ * do hold.
+ */
+export function roleFor(roleNames: readonly string[]): { id: RoleId; label: string } {
+  const known = BY_PRIORITY.find((role) => roleNames.includes(role.name));
+  if (known) return { id: known.id, label: known.label };
+  return { id: "teacher", label: roleNames[0] ?? "No role yet" };
 }

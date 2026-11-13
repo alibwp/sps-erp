@@ -49,7 +49,8 @@ export function readRefreshCookie(req: Request): string | undefined {
 
 // The cookie travels with every request to /api/v1/auth, also ones another
 // site makes the browser send. Refresh and logout therefore answer only
-// requests whose Origin is one of the frontend origins (CORS_ORIGIN).
+// requests whose Origin is one of the frontend origins (corsOrigins:
+// CORS_ORIGIN or its default, plus the origin of FRONTEND_URL).
 export function assertAllowedOrigin(req: Request, config: ConfigService): void {
   const origin = req.headers.origin;
   if (!origin || !corsOrigins(config).includes(origin)) {

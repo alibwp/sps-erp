@@ -2,16 +2,17 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Eye, EyeOff, MailCheck } from "lucide-react";
-import { useState, type FormEvent, type ReactNode } from "react";
-import { Button } from "@/components/ui/button";
+import { CircleAlert, Eye, EyeOff, MailCheck } from "lucide-react";
+import { useEffect, useRef, useState, useSyncExternalStore, type FormEvent, type ReactNode } from "react";
+import { Button, ButtonLink } from "@/components/ui/button";
 import { Field, Input } from "@/components/ui/form";
 import { Alert } from "@/components/ui/misc";
-import { signIn } from "@/components/auth/session";
-import { ROLES, roleForEmail } from "@/lib/roles";
+import { answerChallenge, hasPendingChallenge, login, useAuth } from "@/components/auth/session";
+import { api, ApiError } from "@/lib/api";
 
-// Sign-in screens. None of them reach the backend yet: each form shows the
-// state it would show after a successful request, so the flow can be walked.
+// Sign-in screens. Login, the two-factor code and accepting an invitation
+// talk to the backend; the others still only show the state they would show
+// after a successful request.
 
 function useSubmit(onDone: () => void, delay = 600) {
   const [submitting, setSubmitting] = useState(false);
@@ -51,65 +52,76 @@ function PasswordInput({ id, name, autoComplete }: { id: string; name: string; a
   );
 }
 
+// Where to go after signing in: the page that sent the person here, or the
+// dashboard.
+function nextPath(): string {
+  const next = new URLSearchParams(window.location.search).get("next");
+  return next && next.startsWith("/") && !next.startsWith("//") ? next : "/dashboard";
+}
+
+function messageOf(error: unknown): string {
+  return error instanceof ApiError ? error.message : "Something went wrong. Please try again.";
+}
+
+function ErrorAlert({ message }: { message: string | null }) {
+  if (!message) return null;
+  return (
+    <Alert tone="destructive" icon={CircleAlert}>
+      {message}
+    </Alert>
+  );
+}
+
 export function LoginForm() {
   const router = useRouter();
-  const { submitting, submit } = useSubmit(() => router.push("/dashboard"));
+  const session = useAuth();
+  const [error, setError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+  const formRef = useRef<HTMLFormElement>(null);
+
+  // Next keeps a page the person has left mounted but hidden. The form starts
+  // over when they leave: no password kept in the page and no "Working..."
+  // waiting for them after they sign out.
+  useEffect(() => {
+    const form = formRef.current;
+    return () => {
+      form?.reset();
+      setError(null);
+      setSubmitting(false);
+    };
+  }, []);
+
+  // Already signed in (the refresh cookie restored the session).
+  useEffect(() => {
+    if (session.status === "signed-in") router.replace(nextPath());
+  }, [session.status, router]);
+
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+    setError(null);
+    setSubmitting(true);
+    try {
+      const outcome = await login(String(form.get("email") ?? ""), String(form.get("password") ?? ""));
+      if (outcome === "two-factor") router.push("/two-factor-challenge");
+      else router.replace(nextPath());
+    } catch (failure) {
+      setError(messageOf(failure));
+      setSubmitting(false);
+    }
+  }
 
   return (
-    <div className="space-y-6">
-      <form
-        onSubmit={(event) => {
-          // The demo account's role decides which dashboard opens.
-          signIn(roleForEmail(String(new FormData(event.currentTarget).get("email") ?? "")));
-          submit(event);
-        }}
-        className="grid gap-5"
-      >
-        <Field label="Email address" htmlFor="email">
-          <Input id="email" name="email" type="email" autoComplete="email" autoFocus required placeholder="you@spsarmyschool.edu.pk" />
-        </Field>
-        <Field label="Password" htmlFor="password">
-          <PasswordInput id="password" name="password" autoComplete="current-password" />
-        </Field>
-        <label htmlFor="remember" className="flex items-center gap-3 text-sm text-muted-foreground">
-          <input type="checkbox" id="remember" name="remember" />
-          <span>Remember me</span>
-        </label>
-        <SubmitButton submitting={submitting}>Log in</SubmitButton>
-      </form>
-
-      <section className="space-y-3" aria-labelledby="demo-accounts-heading">
-        <div className="space-y-1">
-          <h2 id="demo-accounts-heading" className="text-sm font-medium">
-            Try the demo as
-          </h2>
-          <p className="text-sm text-muted-foreground">
-            Sign-in is not connected to the backend yet. Each role opens its own dashboard.
-          </p>
-        </div>
-        <div className="grid grid-cols-2 gap-2">
-          {ROLES.map(({ id, label, email }) => (
-            <Button
-              key={id}
-              variant="outline"
-              className="h-auto min-h-11 whitespace-normal py-2 text-center"
-              disabled={submitting}
-              onClick={() => {
-                // Fill the form with the role's account and sign in, as the reference does.
-                const emailInput = document.getElementById("email") as HTMLInputElement | null;
-                const passwordInput = document.getElementById("password") as HTMLInputElement | null;
-                if (!emailInput || !passwordInput) return;
-                emailInput.value = email;
-                passwordInput.value = "password";
-                emailInput.form?.requestSubmit();
-              }}
-            >
-              {label}
-            </Button>
-          ))}
-        </div>
-      </section>
-    </div>
+    <form ref={formRef} onSubmit={submit} className="grid gap-5">
+      <ErrorAlert message={error} />
+      <Field label="Email address" htmlFor="email">
+        <Input id="email" name="email" type="email" autoComplete="email" autoFocus required />
+      </Field>
+      <Field label="Password" htmlFor="password">
+        <PasswordInput id="password" name="password" autoComplete="current-password" />
+      </Field>
+      <SubmitButton submitting={submitting}>Log in</SubmitButton>
+    </form>
   );
 }
 
@@ -155,13 +167,61 @@ export function ResetPasswordForm() {
   );
 }
 
+const noChange = () => () => undefined;
+
 export function TwoFactorForm() {
   const router = useRouter();
   const [useRecovery, setUseRecovery] = useState(false);
-  const { submitting, submit } = useSubmit(() => router.push("/dashboard"));
+  const [error, setError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+  // The login that asked for the code lives in this page's memory only.
+  const pending = useSyncExternalStore(noChange, hasPendingChallenge, () => true);
+  const formRef = useRef<HTMLFormElement>(null);
+
+  // Starts over when the person leaves the page (see LoginForm).
+  useEffect(() => {
+    const form = formRef.current;
+    return () => {
+      form?.reset();
+      setError(null);
+      setSubmitting(false);
+      setUseRecovery(false);
+    };
+  }, []);
+
+  // A correct code ends the challenge; keep the form until the next page shows.
+  if (!pending && !submitting) {
+    return (
+      <div className="grid gap-5">
+        <Alert icon={CircleAlert}>Your sign-in has expired. Please log in again.</Alert>
+        <ButtonLink href="/login" className="h-11 w-full">
+          Back to login
+        </ButtonLink>
+      </div>
+    );
+  }
+
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+    setError(null);
+    setSubmitting(true);
+    try {
+      await answerChallenge(
+        useRecovery
+          ? { recoveryCode: String(form.get("recovery_code") ?? "").trim() }
+          : { code: String(form.get("code") ?? "").trim() },
+      );
+      router.replace(nextPath());
+    } catch (failure) {
+      setError(messageOf(failure));
+      setSubmitting(false);
+    }
+  }
 
   return (
-    <form onSubmit={submit} className="grid gap-5">
+    <form ref={formRef} onSubmit={submit} className="grid gap-5">
+      <ErrorAlert message={error} />
       {useRecovery ? (
         <Field label="Recovery code" htmlFor="recovery_code">
           <Input id="recovery_code" name="recovery_code" autoComplete="one-time-code" required autoFocus />
@@ -222,14 +282,87 @@ export function ConfirmPasswordForm() {
   );
 }
 
-export function AcceptInvitationForm() {
-  const router = useRouter();
-  const { submitting, submit } = useSubmit(() => router.push("/dashboard"));
+type Invitation = { name: string; email: string; expiresAt: string };
+
+/** Sets the first password of an invited account (the emailed link). */
+export function InvitationForm({ token }: { token: string }) {
+  const [invitation, setInvitation] = useState<Invitation | null>(null);
+  const [problem, setProblem] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+  const [accepted, setAccepted] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    api<Invitation>(`/v1/invitations/${encodeURIComponent(token)}`)
+      .then((found) => {
+        if (!cancelled) setInvitation(found);
+      })
+      .catch((failure: unknown) => {
+        if (!cancelled) setProblem(messageOf(failure));
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [token]);
+
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+    setError(null);
+    setSubmitting(true);
+    try {
+      await api(`/v1/invitations/${encodeURIComponent(token)}/accept`, {
+        method: "POST",
+        body: {
+          password: String(form.get("password") ?? ""),
+          passwordConfirmation: String(form.get("password_confirmation") ?? ""),
+        },
+      });
+      setAccepted(true);
+    } catch (failure) {
+      const fields = failure instanceof ApiError ? Object.values(failure.fields).flat() : [];
+      setError(fields[0] ?? messageOf(failure));
+      setSubmitting(false);
+    }
+  }
+
+  if (accepted) {
+    return (
+      <div className="grid gap-5">
+        <Alert tone="success" icon={MailCheck} title="Your account is ready">
+          Log in with {invitation?.email ?? "your email address"} and the password you chose.
+        </Alert>
+        <ButtonLink href="/login" className="h-11 w-full">
+          Go to login
+        </ButtonLink>
+      </div>
+    );
+  }
+
+  if (problem) {
+    return (
+      <div className="grid gap-5">
+        <Alert icon={CircleAlert}>{problem}</Alert>
+        <Link href="/login" className="text-center text-sm font-medium underline-offset-4 hover:underline">
+          Go to login
+        </Link>
+      </div>
+    );
+  }
+
+  if (!invitation) {
+    return <p className="text-sm text-muted-foreground" aria-busy="true">Checking your invitation…</p>;
+  }
 
   return (
     <form onSubmit={submit} className="grid gap-5">
+      <ErrorAlert message={error} />
+      <Field label="Name" htmlFor="name">
+        <Input id="name" defaultValue={invitation.name} readOnly className="bg-muted/50" />
+      </Field>
       <Field label="Email address" htmlFor="email">
-        <Input id="email" name="email" type="email" defaultValue="teacher@spsarmyschool.edu.pk" readOnly className="bg-muted/50" />
+        <Input id="email" name="email" type="email" defaultValue={invitation.email} readOnly className="bg-muted/50" />
       </Field>
       <Field label="Choose a password" htmlFor="password" help="At least 8 characters.">
         <PasswordInput id="password" name="password" autoComplete="new-password" />

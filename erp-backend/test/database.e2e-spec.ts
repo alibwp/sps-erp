@@ -67,21 +67,41 @@ describe('Database foundation (e2e)', () => {
     });
 
     it('revert undoes the last migration, and running again restores it', async () => {
-      const tables = async () =>
-        (
+      // The tables, their columns and how many rows each holds, so a
+      // migration that only adds a column or seeds data shows its revert
+      // too.
+      const state = async () => ({
+        rows: await rowCounts(),
+        columns: (
+          await dataSource.query(
+            "SELECT table_name || '.' || column_name AS name FROM information_schema.columns WHERE table_schema = 'public' ORDER BY 1",
+          )
+        ).map((row: { name: string }) => row.name),
+      });
+      const rowCounts = async () => {
+        const tables = (
           await dataSource.query(
             "SELECT tablename FROM pg_tables WHERE schemaname = 'public' AND tablename NOT IN ('migrations', 'e2e_probe_records') ORDER BY tablename",
           )
         ).map((row: { tablename: string }) => row.tablename);
-      const before = await tables();
+        const rows: Record<string, number> = {};
+        for (const table of tables) {
+          const [{ n }] = await dataSource.query(
+            `SELECT count(*)::int AS n FROM "${table}"`,
+          );
+          rows[table] = n;
+        }
+        return rows;
+      };
+      const before = await state();
 
       await dataSource.undoLastMigration();
       expect(await dataSource.showMigrations()).toBe(true); // one pending
-      expect((await tables()).length).toBeLessThan(before.length);
+      expect(await state()).not.toEqual(before);
 
       await dataSource.runMigrations();
       expect(await dataSource.showMigrations()).toBe(false);
-      expect(await tables()).toEqual(before);
+      expect(await state()).toEqual(before);
     });
 
     it('every migration reverts down to an empty schema and runs up again', async () => {

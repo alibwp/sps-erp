@@ -5,9 +5,11 @@ import { User } from '../../src/identity/entities/user.entity.js';
 import { REFRESH_COOKIE } from '../../src/identity/auth/refresh-cookie.js';
 import { PasswordHasher } from '../../src/identity/password-hasher.js';
 import type { MailMessage } from '../../src/mail/mail.service.js';
+import { TEST_FRONTEND_ORIGIN } from './test-env.js';
 
-// A frontend origin from CORS_ORIGIN (refresh and logout require one).
-export const ORIGIN = 'http://localhost:3000';
+// The frontend origin the tests set as CORS_ORIGIN (refresh and logout
+// require one).
+export const ORIGIN = TEST_FRONTEND_ORIGIN;
 export const PASSWORD = 'correct horse battery';
 
 let ipCounter = 0;

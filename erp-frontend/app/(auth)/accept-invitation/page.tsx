@@ -1,16 +1,7 @@
-import type { Metadata } from "next";
-import { AuthCard } from "@/components/auth/auth-card";
-import { AcceptInvitationForm } from "@/components/auth/auth-forms";
+import { redirect } from "next/navigation";
 
-export const metadata: Metadata = { title: "Accept invitation" };
-
+// Invitation links open /invitations/{token}; without a token there is
+// nothing to accept here.
 export default function AcceptInvitationPage() {
-  return (
-    <AuthCard
-      title="You're invited"
-      description="SPS Army School invited you to SPS ERP. Choose a password to set up your account."
-    >
-      <AcceptInvitationForm />
-    </AuthCard>
-  );
+  redirect("/login");
 }

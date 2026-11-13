@@ -5,6 +5,20 @@ import { createMailTransport } from './mail.transport.js';
 
 const message = { to: 'parent@example.com', subject: 'Welcome', text: 'Hello' };
 
+// The users table as MailService reads it: the demo addresses among those
+// asked about.
+function users(demo: string[] = []) {
+  return {
+    query: vi.fn((_sql: string, [asked]: [string[]]) =>
+      Promise.resolve(
+        asked
+          .filter((email) => demo.includes(email))
+          .map((email) => ({ email })),
+      ),
+    ),
+  };
+}
+
 describe('MailService', () => {
   it('only enqueues the message, with retries, and drops it once sent', async () => {
     const queue = {
@@ -13,15 +27,44 @@ describe('MailService', () => {
       add: vi.fn().mockResolvedValue({ id: 'job-1' }),
     };
 
-    await expect(new MailService(queue as never).send(message)).resolves.toBe(
-      'job-1',
-    );
+    await expect(
+      new MailService(queue as never, users() as never).send(message),
+    ).resolves.toBe('job-1');
 
     expect(queue.add).toHaveBeenCalledWith(SEND_MAIL_JOB, message, {
       attempts: 5,
       backoff: { type: 'exponential', delay: 30_000 },
       removeOnComplete: true,
     });
+  });
+
+  it('never emails a demo account', async () => {
+    const queue = {
+      name: 'mail',
+      waitUntilReady: vi.fn().mockResolvedValue({}),
+      add: vi.fn().mockResolvedValue({ id: 'job-2' }),
+    };
+    const service = new MailService(
+      queue as never,
+      users(['teacher@gmail.com']) as never,
+    );
+
+    await expect(
+      service.send({ ...message, to: ' Teacher@Gmail.com ' }),
+    ).resolves.toBeUndefined();
+    await expect(
+      service.send({
+        ...message,
+        to: ['teacher@gmail.com', 'head@school.test'],
+      }),
+    ).resolves.toBe('job-2');
+
+    expect(queue.add).toHaveBeenCalledTimes(1);
+    expect(queue.add).toHaveBeenCalledWith(
+      SEND_MAIL_JOB,
+      { ...message, to: ['head@school.test'] },
+      expect.anything(),
+    );
   });
 
   it('fails with 503 service_unavailable when the queue refuses the job', async () => {
@@ -32,7 +75,7 @@ describe('MailService', () => {
     };
 
     await expect(
-      new MailService(queue as never).send(message),
+      new MailService(queue as never, users() as never).send(message),
     ).rejects.toMatchObject({
       code: 'service_unavailable',
       status: 503,

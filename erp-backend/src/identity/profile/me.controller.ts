@@ -37,6 +37,7 @@ import {
 import type { User } from '../entities/user.entity.js';
 import { ChangePasswordDto, MeDto, UpdateProfileDto } from '../identity.dto.js';
 import { PHOTO_MAX_BYTES, ProfileService } from './profile.service.js';
+import { AllowGraduatedLearners } from '../../access/access-context.js';
 
 // Multer stops reading at the size limit; that answer becomes the same 400
 // as any other photo problem.
@@ -61,6 +62,7 @@ class PhotoTooLarge implements NestInterceptor {
 
 @ApiTags('Me')
 @ApiBearerAuth('bearer')
+@AllowGraduatedLearners()
 @Controller('me')
 export class MeController {
   constructor(private readonly profile: ProfileService) {}

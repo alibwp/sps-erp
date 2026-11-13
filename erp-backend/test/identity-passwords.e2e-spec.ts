@@ -335,11 +335,18 @@ describe('Forgot-password while Redis is down (e2e)', () => {
     waitUntilReady: () => new Promise<never>(() => undefined),
     add: vi.fn(),
   };
+  const noDemoAccounts = { query: () => Promise.resolve([]) };
 
   beforeAll(async () => {
     app = await createTestApp({
       overrides: [
-        { provide: MailService, useValue: new MailService(deadQueue as never) },
+        {
+          provide: MailService,
+          useValue: new MailService(
+            deadQueue as never,
+            noDemoAccounts as never,
+          ),
+        },
       ],
     });
     dataSource = app.get(DataSource);

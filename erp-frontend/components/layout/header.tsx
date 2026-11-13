@@ -14,7 +14,7 @@ import {
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
 import { Avatar, Kbd } from "@/components/ui/misc";
-import { signOut, useSession } from "@/components/auth/session";
+import { logout, useSession } from "@/components/auth/session";
 import { SCHOOL } from "@/lib/mock";
 import { cn } from "@/lib/utils";
 
@@ -131,8 +131,7 @@ export function Header() {
           </DropdownMenuLink>
           <DropdownMenuItem
             onClick={() => {
-              signOut();
-              router.push("/login");
+              void logout().finally(() => router.replace("/login"));
             }}
           >
             <LogOut /> Log out

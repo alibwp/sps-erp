@@ -17,13 +17,11 @@ EXPOSE 3000
 CMD ["npm", "run", "dev", "--", "--hostname", "0.0.0.0"]
 
 # ---- Production build ----
+# The backend is reached through this site's /api at run time (BACKEND_URL,
+# default the live backend), so the build needs no backend address.
 FROM deps AS build
-# Live backend URL: --build-arg NEXT_PUBLIC_API_URL=https://.../api
-ARG NEXT_PUBLIC_API_URL
 COPY . .
-# Next.js treats an empty variable as set, so drop it when no value was given.
-RUN if [ -z "$NEXT_PUBLIC_API_URL" ]; then unset NEXT_PUBLIC_API_URL; fi \
-  && npm run build
+RUN npm run build
 
 # ---- Production runtime: docker build --target prod -t sps-erp-frontend . ----
 FROM base AS prod

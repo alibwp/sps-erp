@@ -39,7 +39,8 @@ export class PasswordResetService {
     const user = await this.dataSource.manager.findOne(User, {
       where: { email: normalizeEmail(email) },
     });
-    if (!user) return;
+    // A demo account is never emailed; the answer stays the same.
+    if (!user || user.demoAccount) return;
 
     await this.transactions.run(async (tx) => {
       await tx.lockOne(User, { id: user.id });

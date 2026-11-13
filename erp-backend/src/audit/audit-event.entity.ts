@@ -7,9 +7,13 @@ import {
   ManyToOne,
   PrimaryGeneratedColumn,
 } from 'typeorm';
+import { NamesItsOwnSchool } from '../common/tenancy/school-scope.js';
 import { User } from '../identity/entities/user.entity.js';
+import { School } from '../organizations/entities/school.entity.js';
 
-// The append-only audit log (a trigger refuses UPDATE and DELETE).
+// The append-only audit log (a trigger refuses UPDATE and DELETE). The
+// campus is named by the code that records the event.
+@NamesItsOwnSchool()
 @Entity({ name: 'audit_events' })
 @Index('audit_events_school_action_index', ['schoolId', 'action', 'createdAt'])
 @Index('audit_events_actor_index', ['actorId', 'createdAt'])
@@ -18,9 +22,14 @@ export class AuditEvent {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  // No foreign key until the schools table exists (Stage 2).
   @Column({ type: 'uuid', nullable: true })
   schoolId: string | null;
+
+  // Plain foreign key, as for the actor: this table refuses the UPDATE an
+  // ON DELETE SET NULL would make.
+  @ManyToOne(() => School, { onDelete: 'NO ACTION', nullable: true })
+  @JoinColumn({ name: 'school_id' })
+  school: School | null;
 
   @Column({ type: 'uuid', nullable: true })
   actorId: string | null;
