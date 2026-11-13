@@ -110,10 +110,21 @@ export async function seedDemoUsers(
       `--password must be at least ${PASSWORD_MIN_LENGTH} characters.`,
     );
   }
+  return seedDemoUsersWithHash(
+    app,
+    await app.get(PasswordHasher).hash(password),
+  );
+}
+
+// The same with the password already hashed (argon2id), for the live
+// start-up, which holds only the hash.
+export async function seedDemoUsersWithHash(
+  app: INestApplicationContext,
+  passwordHash: string,
+): Promise<SeededDemo> {
   return asCliError(async () => {
     await refuseOtherAccounts(app);
     const school = await demoCampus(app);
-    const passwordHash = await app.get(PasswordHasher).hash(password);
     const accounts = await app.get(TransactionService).run(async (tx) => {
       const manager = tx.manager;
       // Two runs at once: the second waits, then finds everything made.
@@ -360,18 +371,16 @@ async function admitStudent(
   const { year, period } = await schoolYear(app, school);
   const level = await classOne(app, school);
   const section = await sectionA(app, school, year, level);
-  await app
-    .get(Students)
-    .admit(
-      null,
-      school.id,
-      { academicYear: year, academicPeriod: period, source: null, error: null },
-      {
-        name: user.name,
-        email: user.email,
-        academicCycleSectionId: section.id,
-      },
-    );
+  await app.get(Students).admit(
+    null,
+    school.id,
+    { academicYear: year, academicPeriod: period, source: null, error: null },
+    {
+      name: user.name,
+      email: user.email,
+      academicCycleSectionId: section.id,
+    },
+  );
 }
 
 // The published school year covering campus today. When there is none, a
