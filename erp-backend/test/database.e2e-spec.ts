@@ -67,9 +67,18 @@ describe('Database foundation (e2e)', () => {
     });
 
     it('revert undoes the last migration, and running again restores it', async () => {
-      // The tables and how many rows each holds, so a migration that only
-      // seeds data shows its revert too.
-      const state = async () => {
+      // The tables, their columns and how many rows each holds, so a
+      // migration that only adds a column or seeds data shows its revert
+      // too.
+      const state = async () => ({
+        rows: await rowCounts(),
+        columns: (
+          await dataSource.query(
+            "SELECT table_name || '.' || column_name AS name FROM information_schema.columns WHERE table_schema = 'public' ORDER BY 1",
+          )
+        ).map((row: { name: string }) => row.name),
+      });
+      const rowCounts = async () => {
         const tables = (
           await dataSource.query(
             "SELECT tablename FROM pg_tables WHERE schemaname = 'public' AND tablename NOT IN ('migrations', 'e2e_probe_records') ORDER BY tablename",

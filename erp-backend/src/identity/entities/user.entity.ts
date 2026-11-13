@@ -88,6 +88,11 @@ export class User extends AppBaseEntity {
   @Column({ type: 'integer', nullable: true })
   twoFactorLastTimeStep: number | null;
 
+  // Made by seed-demo-users for trying the app. The addresses may belong to
+  // strangers, so nothing is ever emailed to a demo account.
+  @Column({ type: 'boolean', default: false })
+  demoAccount: boolean;
+
   @DeleteDateColumn({ type: 'timestamptz', nullable: true })
   deletedAt: Date | null;
 }
