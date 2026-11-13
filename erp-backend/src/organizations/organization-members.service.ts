@@ -150,6 +150,47 @@ export class OrganizationMembers {
     });
   }
 
+  // Makes the person an active member with every organization permission,
+  // inside the caller's transaction. Only commands run on the server call
+  // this (seed-demo-users); it is safe to repeat.
+  async grantAllIn(
+    manager: EntityManager,
+    organizationId: string,
+    userId: string,
+  ): Promise<OrganizationMembership> {
+    let membership = await manager.findOne(OrganizationMembership, {
+      where: { organizationId, userId },
+      lock: { mode: 'pessimistic_write' },
+    });
+    const wasActive = membership?.status === 'active';
+    membership ??= manager.create(OrganizationMembership, {
+      organizationId,
+      userId,
+    });
+    membership.permissions = null;
+    membership.status = 'active';
+    membership.joinedAt ??= this.clock.now();
+    membership.endedAt = null;
+    membership = await manager.save(membership);
+
+    await this.roles.grantGlobal(
+      manager,
+      userId,
+      BuiltInRole.OrganizationAdmin,
+      null,
+    );
+    if (!wasActive) {
+      await this.audit.record(manager, {
+        action: AuditAction.OrganizationMembershipGranted,
+        subject: { type: ORGANIZATION_MEMBERSHIP_SUBJECT, id: membership.id },
+        context: { organization_id: organizationId, user_id: userId },
+        schoolId: null,
+        actorId: null,
+      });
+    }
+    return membership;
+  }
+
   // Sets what a member may do; null gives every organization permission.
   // "read organization" is always kept.
   async setPermissions(

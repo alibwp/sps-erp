@@ -50,22 +50,30 @@ export class RoleAssignments {
 
   // Gives a campus role to somebody who works at the campus. Returns false
   // when they already held it (nothing is recorded then). Reference:
-  // AssignCampusRole::give.
+  // AssignCampusRole::give. A null actor is a command run on the server
+  // (seed-demo-users), which holds no permissions of its own to check.
   async give(
     manager: EntityManager,
-    input: { person: User; role: Role; schoolId: string; actorId: string },
+    input: {
+      person: User;
+      role: Role;
+      schoolId: string;
+      actorId: string | null;
+    },
   ): Promise<boolean> {
     const { person, role, schoolId, actorId } = input;
     this.mustBeAStaffRole(role, schoolId);
 
     // Giving a role hands out everything in it, so nobody gives away what
     // they do not hold.
-    await this.authority.mustBeGrantable(
-      manager,
-      await this.permissionsOf(manager, role.id),
-      actorId,
-      schoolId,
-    );
+    if (actorId !== null) {
+      await this.authority.mustBeGrantable(
+        manager,
+        await this.permissionsOf(manager, role.id),
+        actorId,
+        schoolId,
+      );
+    }
 
     const member = await manager.exists(SchoolMembership, {
       where: { userId: person.id, schoolId, status: 'active' },

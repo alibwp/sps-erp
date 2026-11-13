@@ -216,9 +216,10 @@ export class Students {
   // Admits a learner (StudentService::createStudent): the account, the
   // campus membership, the student role, the enrollment and its first
   // placement in one transaction. A new account is sent its invitation
-  // after commit.
+  // after commit. A null actor is a command run on the server
+  // (seed-demo-users).
   async admit(
-    actorId: string,
+    actorId: string | null,
     schoolId: string,
     working: WorkingPeriod,
     input: AdmitInput,
