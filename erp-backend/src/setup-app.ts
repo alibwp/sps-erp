@@ -6,12 +6,38 @@ import helmet from 'helmet';
 import { Logger } from 'nestjs-pino';
 import { setupOpenApi } from './common/openapi/openapi.js';
 
-// Frontend URLs allowed to call this API: CORS_ORIGIN, comma-separated.
+// The live frontend. It calls the API through its own /api proxy, so the
+// browser's Origin reaching refresh and logout is this one.
+export const LIVE_FRONTEND_ORIGIN = 'https://sps-erp-phi.vercel.app';
+
+const LOCAL_FRONTEND_ORIGINS = [
+  'http://localhost:3000',
+  'http://127.0.0.1:3000',
+];
+
+// Frontend origins allowed to call this API: CORS_ORIGIN, comma-separated.
+// Unset, the local frontend is allowed, or in production the live one. The
+// origin of FRONTEND_URL (where the emailed links lead) is always allowed.
 export function corsOrigins(config: ConfigService): string[] {
-  return config
-    .get<string>('CORS_ORIGIN', 'http://localhost:3000,http://127.0.0.1:3000')
-    .split(',')
-    .map((origin) => origin.trim());
+  const configured = config.get<string>('CORS_ORIGIN')?.trim();
+  const origins = configured
+    ? configured.split(',').map((origin) => origin.trim())
+    : config.get<string>('NODE_ENV') === 'production'
+      ? [LIVE_FRONTEND_ORIGIN]
+      : LOCAL_FRONTEND_ORIGINS;
+  const frontend = originOf(config.get<string>('FRONTEND_URL'));
+  return [...new Set([...origins, ...(frontend ? [frontend] : [])])].filter(
+    Boolean,
+  );
+}
+
+function originOf(url: string | undefined): string | null {
+  if (!url?.trim()) return null;
+  try {
+    return new URL(url.trim()).origin;
+  } catch {
+    return null;
+  }
 }
 
 // TRUST_PROXY: how many proxies (load balancer, CDN) sit in front of the

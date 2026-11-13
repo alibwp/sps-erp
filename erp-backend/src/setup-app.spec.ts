@@ -19,6 +19,43 @@ describe('corsOrigins', () => {
       'https://admin.example.com',
     ]);
   });
+
+  it('allows the live frontend in production when CORS_ORIGIN is unset', () => {
+    expect(corsOrigins(new ConfigService({ NODE_ENV: 'production' }))).toEqual([
+      'https://sps-erp-phi.vercel.app',
+    ]);
+    expect(
+      corsOrigins(
+        new ConfigService({ NODE_ENV: 'production', CORS_ORIGIN: ' ' }),
+      ),
+    ).toEqual(['https://sps-erp-phi.vercel.app']);
+  });
+
+  it('always allows the origin of FRONTEND_URL', () => {
+    expect(
+      corsOrigins(
+        new ConfigService({
+          NODE_ENV: 'production',
+          FRONTEND_URL: 'https://erp.school.org/app/',
+        }),
+      ),
+    ).toEqual(['https://sps-erp-phi.vercel.app', 'https://erp.school.org']);
+    expect(
+      corsOrigins(
+        new ConfigService({
+          CORS_ORIGIN: 'https://erp.example.com',
+          FRONTEND_URL: 'https://erp.example.com/',
+        }),
+      ),
+    ).toEqual(['https://erp.example.com']);
+    expect(
+      corsOrigins(new ConfigService({ FRONTEND_URL: 'http://localhost:3100' })),
+    ).toEqual([
+      'http://localhost:3000',
+      'http://127.0.0.1:3000',
+      'http://localhost:3100',
+    ]);
+  });
 });
 
 describe('trustProxy', () => {
