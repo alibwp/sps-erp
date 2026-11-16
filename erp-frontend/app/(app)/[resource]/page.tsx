@@ -39,6 +39,18 @@ export default async function ResourceListPage({ params }: Props) {
       }
     >
       <div className="grid gap-10">
+        {resource.stats && resource.stats.length > 0 && (
+          <section aria-label={`${resource.title} summary`}>
+            <dl className="grid grid-cols-2 gap-x-6 gap-y-5 sm:grid-cols-3 xl:grid-cols-5">
+              {resource.stats.map((stat) => (
+                <div key={stat.label} className="flex min-w-0 flex-col-reverse justify-end">
+                  <dt className="truncate text-sm text-muted-foreground">{stat.label}</dt>
+                  <dd className="truncate text-2xl font-semibold tabular-nums">{stat.value}</dd>
+                </div>
+              ))}
+            </dl>
+          </section>
+        )}
         {resource.slug === "calendar-events" && <CalendarMonth />}
         <ResourceTable slug={resource.slug} />
       </div>

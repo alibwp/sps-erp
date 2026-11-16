@@ -1,6 +1,37 @@
 import {
+  ArrowLeftRight,
   Award,
+  BadgePercent,
+  Banknote,
   BedDouble,
+  BookOpen,
+  BookText,
+  Calculator,
+  CalendarClock,
+  ChartColumn,
+  ChartPie,
+  ClipboardList,
+  Coins,
+  CreditCard,
+  FileCheck,
+  FileSpreadsheet,
+  HandCoins,
+  History,
+  IdCard,
+  Layers,
+  Network,
+  PiggyBank,
+  ReceiptText,
+  Repeat,
+  Scale,
+  Send,
+  ShoppingCart,
+  Store,
+  Tags,
+  TrendingUp,
+  TriangleAlert,
+  UserMinus,
+  Vault,
   Bell,
   BookMarked,
   BookOpenCheck,
@@ -181,6 +212,124 @@ export const navigation: NavGroup[] = [
 ];
 
 /**
+ * The accountant's own sidebar. Their work is money, so instead of a filtered
+ * copy of the whole-school sidebar they get their finance modules, each one
+ * opening into its screens, then the students they read and the academic
+ * records their "read report" permission covers.
+ */
+export const ACCOUNTANT_NAVIGATION: NavGroup[] = [
+  {
+    label: "Workspace",
+    items: [{ label: "Dashboard", href: "/dashboard", icon: Gauge }],
+  },
+  {
+    label: "Finance",
+    items: [
+      {
+        label: "Fees",
+        icon: DollarSign,
+        children: [
+          { label: "Fee invoices", href: "/fee-invoices", icon: Receipt },
+          { label: "Fees", href: "/fees", icon: Coins },
+          { label: "Fee categories", href: "/fee-categories", icon: Tags },
+        ],
+      },
+      {
+        label: "Expenses",
+        icon: ReceiptText,
+        children: [
+          { label: "Expenses", href: "/expenses", icon: Receipt },
+          { label: "Expense heads", href: "/expense-heads", icon: Layers },
+          { label: "Vendors", href: "/vendors", icon: Store },
+          { label: "Purchase requests", href: "/purchase-requests", icon: ShoppingCart },
+          { label: "Recurring", href: "/recurring-expenses", icon: Repeat },
+          { label: "Petty cash", href: "/petty-cash", icon: Vault },
+          { label: "Cash deposits", href: "/cash-deposits", icon: Landmark },
+          { label: "Bank accounts", href: "/bank-accounts", icon: CreditCard },
+        ],
+      },
+      {
+        label: "Payroll",
+        icon: Banknote,
+        children: [
+          { label: "Payroll runs", href: "/payroll-runs", icon: CalendarClock },
+          { label: "Generate", href: "/payroll-sheets", icon: Calculator },
+          { label: "Salary structures", href: "/salary-structures", icon: Network },
+          { label: "Allowances & deductions", href: "/payroll-components", icon: ArrowLeftRight },
+          { label: "Advances & loans", href: "/staff-advances", icon: HandCoins },
+          { label: "Tax & statutory", href: "/payroll-tax", icon: Scale },
+          { label: "Payments", href: "/salary-payments", icon: Send },
+          { label: "Payslips", href: "/payslips", icon: IdCard },
+          { label: "Arrears", href: "/payroll-arrears", icon: History },
+          { label: "Final settlement", href: "/final-settlements", icon: UserMinus },
+        ],
+      },
+      {
+        label: "Budgets",
+        icon: PiggyBank,
+        children: [
+          { label: "Budgets", href: "/budgets", icon: Wallet },
+          { label: "Budget vs actual", href: "/budget-vs-actual", icon: ChartColumn },
+          { label: "Budget requests", href: "/budget-requests", icon: ClipboardList },
+          { label: "Revisions", href: "/budget-revisions", icon: History },
+          { label: "Financial periods", href: "/financial-periods", icon: CalendarRange },
+          { label: "Chart of accounts", href: "/chart-of-accounts", icon: BookText },
+        ],
+      },
+    ],
+  },
+  {
+    label: "People",
+    items: [
+      {
+        label: "Students",
+        icon: User,
+        children: [
+          { label: "Student list", href: "/students", icon: Users },
+          { label: "Fee statement", href: "/fee-statements", icon: FileText },
+          { label: "Family account", href: "/family-accounts", icon: UsersRound },
+          { label: "Concessions", href: "/fee-concessions", icon: BadgePercent },
+          { label: "Defaulters", href: "/fee-defaulters", icon: TriangleAlert },
+          { label: "Clearance", href: "/fee-clearances", icon: FileCheck },
+        ],
+      },
+    ],
+  },
+  {
+    label: "Insights",
+    items: [
+      {
+        label: "Reports",
+        icon: ChartPie,
+        children: [
+          { label: "Collections", href: "/report-collections", icon: Coins },
+          { label: "Dues", href: "/report-dues", icon: Clock },
+          { label: "Income/Expense", href: "/report-income-expense", icon: TrendingUp },
+          { label: "Payroll", href: "/report-payroll", icon: Banknote },
+          { label: "Budget", href: "/report-budget", icon: PiggyBank },
+          { label: "Ledger & books", href: "/report-ledger", icon: BookOpen },
+          { label: "Financial statements", href: "/report-financial-statements", icon: FileSpreadsheet },
+          { label: "Audit", href: "/report-audit", icon: ShieldCheck },
+          { label: "Scheduled & export", href: "/report-schedules", icon: Mail },
+        ],
+      },
+    ],
+  },
+  {
+    label: "Academic records",
+    items: [
+      { label: "Report cards", href: "/report-cards", icon: FileBadge },
+      { label: "Transcripts", href: "/transcripts", icon: ScrollText },
+    ],
+  },
+];
+
+/** Roles with a sidebar of their own rather than a filtered whole-school one. */
+const ROLE_NAVIGATION: Partial<Record<RoleId, NavGroup[]>> = {
+  accountant: ACCOUNTANT_NAVIGATION,
+};
+
+/**
  * Pages each role does not see, matching the reference sidebar for that role.
  * A role not listed here sees every page (the platform administrator, and the
  * roles whose screens are not built yet).
@@ -209,16 +358,13 @@ const HIDDEN_PAGES: Partial<Record<RoleId, string[]>> = {
 
 /**
  * For roles that see only a few pages, the sidebar pages they do see; every
- * other page is hidden. Matches the reference sidebar for that role.
- *
- * Accountant: Students ("read student"), Report cards, Transcripts and
- * Reports ("read report"), and the two finance pages the reference lists.
+ * other page is hidden. Matches the reference sidebar for that role. (The
+ * accountant has a sidebar of their own: ACCOUNTANT_NAVIGATION.)
  *
  * Librarian: Students ("read student") and the three library pages ("read
  * library", "manage library", "lend library item").
  */
 const VISIBLE_PAGES: Partial<Record<RoleId, string[]>> = {
-  accountant: ["/dashboard", "/students", "/report-cards", "/transcripts", "/reports", "/fee-invoices", "/budgets"],
   librarian: ["/dashboard", "/students", "/library-copies", "/library-loans", "/library-reservations"],
   // Teacher: Students, Syllabi, Timetables, Attendance, Gradebooks, Exam
   // schedules, Calendar and Notices. Rankings ("read ranking") stays hidden
@@ -248,21 +394,24 @@ const VISIBLE_PAGES: Partial<Record<RoleId, string[]>> = {
 /**
  * Hidden pages a role may still open from a link elsewhere, as in the
  * reference: the role holds the permission, only the sidebar leaves the page
- * out (School settings and the finance pages link to these).
+ * out (School settings and the finance pages link to these). The accountant
+ * keeps the whole-school report downloads, which their reports link to.
  */
 const STILL_OPENABLE: Partial<Record<RoleId, string[]>> = {
   "school-admin": ["/fee-categories", "/fees", "/expenses", "/cash-deposits"],
-  accountant: ["/fee-categories", "/fees", "/expenses", "/cash-deposits"],
+  accountant: ["/reports"],
 };
 
 /**
  * Pages a role may read but not change: the guard keeps it off their create
- * and edit screens. The accountant only reads students and budgets; the
- * librarian only reads students; the teacher reads students, exam schedules,
- * the calendar and notices, and writes syllabi, timetables and gradebooks.
+ * and edit screens. The accountant only reads students, budgets, financial
+ * periods and the chart of accounts, which the school administrator keeps;
+ * the librarian only reads students; the teacher reads students, exam
+ * schedules, the calendar and notices, and writes syllabi, timetables and
+ * gradebooks.
  */
 const READ_ONLY: Partial<Record<RoleId, string[]>> = {
-  accountant: ["/students", "/budgets"],
+  accountant: ["/students", "/budgets", "/financial-periods", "/chart-of-accounts"],
   librarian: ["/students"],
   teacher: ["/students", "/exams", "/calendar-events", "/notices"],
   student: ["/syllabi", "/timetables"],
@@ -280,13 +429,20 @@ const portalGroup: NavGroup = {
   ],
 };
 
-const ALL_PAGES = navigation.flatMap((group) =>
-  group.items.flatMap((item) => ("children" in item ? item.children.map((child) => child.href) : [item.href])),
-);
+function pagesIn(groups: NavGroup[]): string[] {
+  return groups.flatMap((group) =>
+    group.items.flatMap((item) => ("children" in item ? item.children.map((child) => child.href) : [item.href])),
+  );
+}
+
+// Every sidebar page, including those only a role's own sidebar lists, so a
+// role is kept off another role's pages too.
+const ALL_PAGES = [...new Set([navigation, ...Object.values(ROLE_NAVIGATION)].flatMap(pagesIn))];
 
 /** The sidebar pages hidden from one role. */
 function hiddenPages(role: RoleId): string[] {
-  const visible = VISIBLE_PAGES[role];
+  const own = ROLE_NAVIGATION[role];
+  const visible = own ? pagesIn(own) : VISIBLE_PAGES[role];
   if (visible) return ALL_PAGES.filter((href) => !visible.includes(href));
   return HIDDEN_PAGES[role] ?? [];
 }
@@ -315,6 +471,8 @@ export function navigationFor(role: RoleId): NavGroup[] {
 
 /** The staff sidebar for one role: hidden pages removed, then empty menus and groups. */
 function staffNavigationFor(role: RoleId): NavGroup[] {
+  const own = ROLE_NAVIGATION[role];
+  if (own) return own;
   const hidden = new Set(hiddenPages(role));
   if (hidden.size === 0) return navigation;
 

@@ -18,6 +18,7 @@ import {
   rows,
   shiftDate,
 } from "@/lib/mock";
+import { financeResources } from "@/lib/finance-resources";
 
 export type CellValue = string | number | null;
 export type Row = { id: string } & Record<string, CellValue>;
@@ -70,6 +71,8 @@ export type Resource = {
   view?: DetailView;
   /** Lists shown under a record, filtered where `matchKey` equals the record title. */
   related?: { slug: string; matchKey: string; title?: string }[];
+  /** Headline figures shown above the list, worked out from `rows`. */
+  stats?: { label: string; value: string }[];
 };
 
 // ---------------------------------------------------------------------------
@@ -1754,9 +1757,9 @@ const list: Resource[] = [
   },
 ];
 
-export const resources: Resource[] = list;
+export const resources: Resource[] = [...list, ...financeResources];
 
-const bySlug = new Map(list.map((resource) => [resource.slug, resource]));
+const bySlug = new Map(resources.map((resource) => [resource.slug, resource]));
 
 export function getResource(slug: string): Resource | undefined {
   return bySlug.get(slug);
