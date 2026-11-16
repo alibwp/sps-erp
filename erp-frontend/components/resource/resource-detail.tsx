@@ -2,7 +2,6 @@ import { Cell } from "@/components/resource/cell";
 import { ResourceTable } from "@/components/resource/data-table";
 import { InvoiceView } from "@/components/screens/invoice-view";
 import { MarkSheet } from "@/components/screens/mark-sheet";
-import { PermissionsMatrix } from "@/components/screens/permissions-matrix";
 import { ReportCardView } from "@/components/screens/report-card-view";
 import { TimetableView } from "@/components/screens/timetable-view";
 import { StatusBadge } from "@/components/ui/badge";
@@ -43,7 +42,6 @@ export function ResourceDetail({ resource, row }: { resource: Resource; row: Row
 
       {resource.view === "timetable" && <TimetableView seed={Number(row.id)} />}
       {resource.view === "marksheet" && <MarkSheet seed={Number(row.id)} />}
-      {resource.view === "permissions" && <PermissionsMatrix role={title} />}
 
       <div className="grid gap-10 xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
         <Card>

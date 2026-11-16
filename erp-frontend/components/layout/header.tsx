@@ -14,8 +14,7 @@ import {
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
 import { Avatar, Kbd } from "@/components/ui/misc";
-import { logout, useSession } from "@/components/auth/session";
-import { SCHOOL } from "@/lib/mock";
+import { logout, useSession, useWorkingContext } from "@/components/auth/session";
 import { cn } from "@/lib/utils";
 
 function subscribeFullscreen(callback: () => void) {
@@ -28,6 +27,7 @@ export function Header() {
   const theme = useTheme();
   const { toggle, setCommandOpen } = useSidebar();
   const { role: user } = useSession();
+  const { campus, working } = useWorkingContext();
   const fullscreen = useSyncExternalStore(subscribeFullscreen, () => document.fullscreenElement !== null, () => false);
 
   const themes = [
@@ -46,10 +46,15 @@ export function Header() {
           <PanelLeft />
         </Button>
         <span className="hidden text-sm font-semibold tracking-tight sm:block">SPS ERP</span>
-        <span className="hidden min-w-0 items-center gap-2 rounded-md border bg-muted/40 px-2.5 py-1 text-xs text-muted-foreground lg:inline-flex">
-          <span className="size-1.5 rounded-full bg-success" aria-hidden />
-          <span className="truncate">{SCHOOL.name}</span>
-        </span>
+        {campus && (
+          <span
+            className="hidden min-w-0 items-center gap-2 rounded-md border bg-muted/40 px-2.5 py-1 text-xs text-muted-foreground lg:inline-flex"
+            title={`${campus.organization.name} · ${campus.name}`}
+          >
+            <span className="size-1.5 rounded-full bg-success" aria-hidden />
+            <span className="truncate">{campus.name}</span>
+          </span>
+        )}
       </div>
 
       <div className="flex h-full shrink-0 items-center gap-1">
@@ -106,7 +111,7 @@ export function Header() {
         <DropdownMenu
           trigger={
             <>
-              <Avatar name={user.name} size="sm" />
+              <Avatar name={user.name} src={user.photoUrl} size="sm" />
               <span className="hidden max-w-40 truncate text-left text-sm font-medium lg:block">{user.name}</span>
               <ChevronDown className="size-3.5 text-muted-foreground" />
             </>
@@ -120,11 +125,15 @@ export function Header() {
             <p className="text-xs text-muted-foreground">{user.email}</p>
             <p className="mt-1 text-xs font-medium text-muted-foreground">{user.label}</p>
           </div>
-          <DropdownMenuLabel>
-            Academic year: {SCHOOL.academicYear}
-            <br />
-            Working term: {SCHOOL.term}
-          </DropdownMenuLabel>
+          {campus && (
+            <DropdownMenuLabel>
+              Campus: {campus.name}
+              <br />
+              Academic year: {working?.academicYear?.name ?? "Not set"}
+              <br />
+              Working term: {working?.academicPeriod?.displayName ?? "Not set"}
+            </DropdownMenuLabel>
+          )}
           <DropdownMenuSeparator />
           <DropdownMenuLink href="/profile">
             <UserRound /> Profile

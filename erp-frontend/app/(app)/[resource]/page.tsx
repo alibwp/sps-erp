@@ -7,6 +7,7 @@ import { ResourceTable } from "@/components/resource/data-table";
 import { CalendarMonth } from "@/components/screens/calendar-month";
 import { ButtonLink } from "@/components/ui/button";
 import { getResource, resources } from "@/lib/resources";
+import { DemoDataNotice } from "@/components/ui/demo";
 
 type Props = { params: Promise<{ resource: string }> };
 
@@ -38,6 +39,7 @@ export default async function ResourceListPage({ params }: Props) {
         )
       }
     >
+      <DemoDataNotice />
       <div className="grid gap-10">
         {resource.stats && resource.stats.length > 0 && (
           <section aria-label={`${resource.title} summary`}>

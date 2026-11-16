@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { Page } from "@/components/layout/page-header";
 import { PortalAreaView } from "@/components/portal/portal-views";
 import { getPortalArea, PORTAL_AREAS, PORTAL_HOME } from "@/lib/portal";
+import { DemoDataNotice } from "@/components/ui/demo";
 
 type Props = { params: Promise<{ area: string }> };
 
@@ -25,6 +26,7 @@ export default async function PortalAreaPage({ params }: Props) {
 
   return (
     <Page title={HEADINGS[area.id] ?? area.label} breadcrumbs={[{ label: "My school", href: PORTAL_HOME }, { label: area.label }]}>
+      <DemoDataNotice what="The family portal" />
       <PortalAreaView area={area.id} />
     </Page>
   );

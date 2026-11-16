@@ -8,7 +8,7 @@ export default function VerifyEmailPage() {
   return (
     <AuthCard
       title="Verify your email"
-      description="Before you continue, open the link we just emailed you. If it did not arrive, we can send another."
+      description="Open the link we emailed you to confirm your address. If it did not arrive, we can send another."
     >
       <VerifyEmailForm />
     </AuthCard>

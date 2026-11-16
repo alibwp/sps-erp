@@ -1,5 +1,5 @@
 import { SectionHeading } from "@/components/ui/misc";
-import { ActiveStudentsSnapshot, EnrolmentByClassTrend } from "@/components/dashboards/trends";
+import { ActiveStudentsSnapshot, EnrolmentByClassTrend } from "@/components/dashboards/live";
 
 /**
  * The librarian's dashboard, as the reference shows it. A librarian may read
