@@ -7,7 +7,6 @@ import { PrintButton } from "@/components/screens/print-button";
 import { ButtonLink } from "@/components/ui/button";
 import { IfCanChange } from "@/components/layout/role-guard";
 import { getResource, getRow, resources, rowTitle } from "@/lib/resources";
-import { DemoDataNotice } from "@/components/ui/demo";
 
 type Props = { params: Promise<{ resource: string; id: string }> };
 
@@ -48,7 +47,6 @@ export default async function ResourceShowPage({ params }: Props) {
         </>
       }
     >
-      <DemoDataNotice />
       <ResourceDetail resource={resource} row={row} />
     </Page>
   );

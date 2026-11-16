@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { SectionHeading } from "@/components/ui/misc";
 import { FeesCollectedTrend, MoneyInOutTrend, OwedTrend } from "@/components/dashboards/finance-trends";
-import { ActiveStudentsSnapshot, EnrolmentByClassTrend } from "@/components/dashboards/live";
+import { ActiveStudentsSnapshot, EnrolmentByClassTrend } from "@/components/dashboards/trends";
 import { ACCOUNTANT_NAVIGATION, type NavItem } from "@/lib/nav";
 
 /**

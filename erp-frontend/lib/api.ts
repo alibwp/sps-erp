@@ -14,29 +14,8 @@ export class ApiError extends Error {
   }
 }
 
-/** One page of a backend list: every list endpoint answers in this shape. */
-export type Paginated<T> = { data: T[]; meta: { page: number; perPage: number; total: number } };
-
-export type QueryValue = string | number | boolean | null | undefined;
-
-/**
- * Adds a query string to `path`, leaving out empty values:
- * withQuery("/v1/subjects", { page: 2, search: "" }) → "/v1/subjects?page=2".
- */
-export function withQuery(path: string, query: Record<string, QueryValue> = {}): string {
-  const params = new URLSearchParams();
-  for (const [key, value] of Object.entries(query)) {
-    if (value === null || value === undefined || value === "") continue;
-    params.set(key, String(value));
-  }
-  const search = params.toString();
-  if (!search) return path;
-  return `${path}${path.includes("?") ? "&" : "?"}${search}`;
-}
-
 export type ApiOptions = {
   method?: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
-  /** Sent as JSON, or as multipart when it is a FormData (file uploads). */
   body?: unknown;
   /** The access token of the signed-in person. */
   token?: string | null;
@@ -54,22 +33,16 @@ const FALLBACK_MESSAGES: Record<number, string> = {
 /** Calls the backend API (`path` starts with /v1/... or /health). */
 export async function api<T>(path: string, options: ApiOptions = {}): Promise<T> {
   const headers: Record<string, string> = { Accept: "application/json" };
-  // The browser sets the multipart Content-Type (with its boundary) itself.
-  const multipart = options.body instanceof FormData;
-  if (options.body !== undefined && !multipart) headers["Content-Type"] = "application/json";
+  if (options.body !== undefined) headers["Content-Type"] = "application/json";
   if (options.token) headers.Authorization = `Bearer ${options.token}`;
   if (options.schoolId) headers["X-School-Id"] = options.schoolId;
-
-  let body: BodyInit | undefined;
-  if (multipart) body = options.body as FormData;
-  else if (options.body !== undefined) body = JSON.stringify(options.body);
 
   let response: Response;
   try {
     response = await fetch(`${API_URL}${path}`, {
       method: options.method ?? "GET",
       headers,
-      body,
+      body: options.body === undefined ? undefined : JSON.stringify(options.body),
       credentials: "same-origin",
       cache: "no-store",
     });

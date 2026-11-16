@@ -16,8 +16,6 @@ export type Role = {
   label: string;
   name: string;
   email: string;
-  /** Signed link to the profile photo; it expires, so Avatar falls back to initials. */
-  photoUrl?: string | null;
 };
 
 // Backend role names, strongest first: a person holding several sees the
