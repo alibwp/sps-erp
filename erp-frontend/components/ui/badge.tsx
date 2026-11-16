@@ -25,9 +25,9 @@ export function Badge({ tone = "neutral", className, ...props }: ComponentProps<
   );
 }
 
-const SUCCESS = /^(active|paid|approved|published|present|completed|available|current|resolved|returned|graduated|accepted|on track|ready to collect|a\+?|built in)$/i;
-const WARNING = /^(pending|draft|partially paid|waiting|submitted|in review|interview|offered|investigating|in progress|late|scheduled|invited|on leave|setting up|near limit|under review|needs review|away|under maintenance|medium|b|open)$/i;
-const DANGER = /^(overdue|rejected|cancelled|absent|suspended|left|expired|declined|over budget|high|f|unpaid|d)$/i;
+const SUCCESS = /^(active|paid|approved|published|present|completed|available|current|resolved|returned|graduated|accepted|on track|ready to collect|a\+?|built in|reconciled|recovered|clear|cleared|sent|filer|converted to expense)$/i;
+const WARNING = /^(pending|draft|partially paid|waiting|submitted|in review|interview|offered|investigating|in progress|late|scheduled|invited|on leave|setting up|near limit|under review|needs review|away|under maintenance|medium|b|open|generated|recovering|requested|processing|unreconciled|reminder sent|promised to pay|non-filer)$/i;
+const DANGER = /^(overdue|rejected|cancelled|absent|suspended|left|expired|declined|over budget|high|f|unpaid|d|dues pending|fee hold|escalated|failed)$/i;
 
 export function toneFor(value: string): Tone {
   if (SUCCESS.test(value)) return "success";
