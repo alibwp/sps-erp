@@ -10,9 +10,11 @@ import { CurriculumModule } from '../curriculum/curriculum.module.js';
 import { CycleSections } from '../curriculum/cycle-sections.service.js';
 import { IdentityModule } from '../identity/identity.module.js';
 import { OrganizationsModule } from '../organizations/organizations.module.js';
+import { AdmissionWaitlist } from './admission-waitlist.service.js';
 import { EnrollmentPlacements } from './enrollment-placements.service.js';
 import { EnrollmentStatuses } from './enrollment-statuses.service.js';
 import { AcademicYearStudentRecord } from './entities/academic-year-student-record.entity.js';
+import { AdmissionWaitlistEntry } from './entities/admission-waitlist-entry.entity.js';
 import { EnrollmentPlacement } from './entities/enrollment-placement.entity.js';
 import { EnrollmentStatusChange } from './entities/enrollment-status-change.entity.js';
 import { Promotion } from './entities/promotion.entity.js';
@@ -20,6 +22,7 @@ import { StudentRecord } from './entities/student-record.entity.js';
 import { GraduatedGuard } from './graduated.guard.js';
 import { isEnrolledLearner, isEnrolledOnlyElsewhere } from './learners.js';
 import {
+  AdmissionWaitlistController,
   GraduationsController,
   PromotionsController,
 } from './moving.controllers.js';
@@ -27,6 +30,7 @@ import { Promotions } from './promotions.service.js';
 import { StudentViews } from './student-views.service.js';
 import { StudentsController } from './students.controller.js';
 import { Students } from './students.service.js';
+import { WaitlistWithdrawals } from './waitlist-withdrawals.service.js';
 
 export const EnrollmentRuleMessages = {
   learnerRole: (name: string) =>
@@ -35,6 +39,8 @@ export const EnrollmentRuleMessages = {
     'This learner attends another campus, so their account is managed there.',
   placedLearners: (count: number) =>
     `Move the ${count} learners of this section before archiving it.`,
+  openWaitlist: (count: number) =>
+    `Decide the ${count} open entries of this section's admission queue before archiving it.`,
 } as const;
 
 // Stage 5 part 1: learners, their enrollments, placements and states, with
@@ -48,6 +54,7 @@ export const EnrollmentRuleMessages = {
       EnrollmentStatusChange,
       AcademicYearStudentRecord,
       Promotion,
+      AdmissionWaitlistEntry,
     ]),
     AccessModule,
     AccountsModule,
@@ -60,14 +67,17 @@ export const EnrollmentRuleMessages = {
     StudentsController,
     PromotionsController,
     GraduationsController,
+    AdmissionWaitlistController,
   ],
   providers: [
+    WaitlistWithdrawals,
     EnrollmentPlacements,
     EnrollmentStatuses,
     Students,
     StudentViews,
     GraduatedGuard,
     Promotions,
+    AdmissionWaitlist,
   ],
   exports: [EnrollmentPlacements, EnrollmentStatuses, Students, GraduatedGuard],
 })
@@ -87,9 +97,10 @@ export class EnrollmentsModule implements OnModuleInit {
       }),
     );
 
-    // A seat is taken by every enrolled learner placed in the section, and
-    // they keep it from being archived (Stage 5 part 2 adds open waitlist
-    // entries and offers).
+    // A seat is taken by every enrolled learner placed in the section and
+    // by every open waitlist offer (SectionSeats). Placed learners and open
+    // waitlist entries keep a section from being archived
+    // (ChangeAcademicCycleSectionStatus).
     const placed = (
       manager: Parameters<typeof this.sections.seatsTaken>[0],
       sectionId: string,
@@ -99,11 +110,25 @@ export class EnrollmentsModule implements OnModuleInit {
         .where('enrollment.academicCycleSectionId = :sectionId', { sectionId })
         .andWhere("enrollment.status IN ('active', 'suspended')")
         .getCount();
+    const waiting = (
+      manager: Parameters<typeof this.sections.seatsTaken>[0],
+      sectionId: string,
+      statuses: string[],
+    ) =>
+      manager
+        .createQueryBuilder(AdmissionWaitlistEntry, 'entry')
+        .where('entry.academicCycleSectionId = :sectionId', { sectionId })
+        .andWhere('entry.status IN (:...statuses)', { statuses })
+        .getCount();
     this.sections.registerUsage({
-      seatsTaken: (manager, section) => placed(manager, section.id),
+      seatsTaken: async (manager, section) =>
+        (await placed(manager, section.id)) +
+        (await waiting(manager, section.id, ['offered'])),
       archiveRefusal: async (manager, section) => {
         const count = await placed(manager, section.id);
-        return count ? EnrollmentRuleMessages.placedLearners(count) : null;
+        if (count) return EnrollmentRuleMessages.placedLearners(count);
+        const open = await waiting(manager, section.id, ['pending', 'offered']);
+        return open ? EnrollmentRuleMessages.openWaitlist(open) : null;
       },
     });
 

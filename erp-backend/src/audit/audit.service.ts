@@ -71,6 +71,10 @@ export const AuditAction = {
 
   EnrollmentPlaced: 'enrollment.placed',
   EnrollmentStatusChanged: 'enrollment.status_changed',
+  AdmissionWaitlistJoined: 'admission_waitlist.joined',
+  AdmissionWaitlistOffered: 'admission_waitlist.offered',
+  AdmissionWaitlistPlaced: 'admission_waitlist.placed',
+  AdmissionWaitlistDeclined: 'admission_waitlist.declined',
   AccountDeleted: 'account.deleted',
 } as const;
 

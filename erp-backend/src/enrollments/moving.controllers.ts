@@ -31,15 +31,26 @@ import {
   type AuthContext,
   CurrentAuth,
 } from '../identity/auth/auth-context.js';
+import {
+  AdmissionWaitlist,
+  WaitlistMessages,
+} from './admission-waitlist.service.js';
+import type { AdmissionWaitlistEntry } from './entities/admission-waitlist-entry.entity.js';
 import type { Promotion } from './entities/promotion.entity.js';
 import {
   GraduateStudentsDto,
   GraduationResultDto,
+  JoinWaitlistDto,
   NoteDto,
+  OfferWaitlistDto,
   PromoteStudentsDto,
   PromotionDto,
   PromotionListQueryDto,
   ReasonDto,
+  WaitlistEntryDto,
+  WaitlistOfferDto,
+  WaitlistQueryDto,
+  WaitlistSectionDto,
 } from './moving.dto.js';
 import { Promotions } from './promotions.service.js';
 import { StudentViews } from './student-views.service.js';
@@ -68,6 +79,31 @@ function promotionDto(promotion: Promotion): PromotionDto {
     destination: sectionBrief(promotion.destinationAcademicCycleSection),
     studentIds: promotion.studentRecordIds,
     createdAt: promotion.createdAt,
+  };
+}
+
+function entryDto(view: {
+  entry: AdmissionWaitlistEntry;
+  next: boolean;
+}): WaitlistEntryDto {
+  const { entry } = view;
+  return {
+    id: entry.id,
+    academicYearId: entry.academicYearId,
+    section: sectionBrief(entry.academicCycleSection),
+    candidate: {
+      id: entry.user.id,
+      name: entry.user.name,
+      email: entry.user.email,
+    },
+    status: entry.status,
+    priority: entry.priority,
+    position: entry.position,
+    next: view.next,
+    decisionReason: entry.decisionReason,
+    offeredAt: entry.offeredAt,
+    decidedAt: entry.decidedAt,
+    createdAt: entry.createdAt,
   };
 }
 
@@ -228,5 +264,157 @@ export class GraduationsController {
         body.reason ?? null,
       ),
     );
+  }
+}
+
+// The admission waitlist (reference AdmissionWaitlistController,
+// AdmissionWaitlistEntryPolicy).
+@ApiTags('Admission waitlist')
+@ApiBearerAuth('bearer')
+@CampusRoute()
+@Controller('admission-waitlist')
+export class AdmissionWaitlistController {
+  constructor(
+    private readonly waitlist: AdmissionWaitlist,
+    private readonly views: StudentViews,
+  ) {}
+
+  @Get()
+  @RequirePermission('read admission waitlist')
+  @ApiOperation({
+    summary: 'The waitlist, by priority (highest first) then position',
+  })
+  @ApiOkResponse({ type: [WaitlistEntryDto] })
+  @ApiErrorResponses(...ERRORS)
+  async list(
+    @Campus() campus: CampusAccess,
+    @Query() query: WaitlistQueryDto,
+  ): Promise<WaitlistEntryDto[]> {
+    return (await this.waitlist.list(campus.school.id, query)).map(entryDto);
+  }
+
+  @Get('sections')
+  @RequirePermission('read admission waitlist')
+  @ApiOperation({
+    summary: 'Sections a candidate may wait for',
+    description:
+      'Active sections with a capacity that are full (placed learners plus open offers), in years that are not closed.',
+  })
+  @ApiOkResponse({ type: [WaitlistSectionDto] })
+  @ApiErrorResponses(...ERRORS)
+  async sections(
+    @Campus() campus: CampusAccess,
+  ): Promise<WaitlistSectionDto[]> {
+    return (await this.waitlist.sectionsToWaitFor(campus.school.id)).map(
+      ({ section, taken }) => ({
+        ...sectionBrief(section),
+        academicYearId: section.academicYearId,
+        capacity: section.capacity!,
+        seatsTaken: taken,
+      }),
+    );
+  }
+
+  @Post()
+  @RequireVerifiedEmail()
+  @RequirePermission('manage admission waitlist')
+  @ApiOperation({
+    summary: 'Put a candidate on a section’s waitlist',
+    description:
+      'Only for a full section with a capacity, and a campus member who is not enrolled here and not staff. An open entry for the same candidate and section is returned as it is.',
+  })
+  @ApiCreatedResponse({ type: WaitlistEntryDto })
+  @ApiErrorResponses(...WRITE_ERRORS)
+  async join(
+    @CurrentAuth() auth: AuthContext,
+    @Campus() campus: CampusAccess,
+    @Body() body: JoinWaitlistDto,
+  ): Promise<WaitlistEntryDto> {
+    const entry = await this.waitlist.join(
+      auth.user.id,
+      campus.school.id,
+      body,
+    );
+    return this.view(campus.school.id, entry.id);
+  }
+
+  @Post('offers')
+  @HttpCode(HttpStatus.OK)
+  @RequireVerifiedEmail()
+  @RequirePermission('manage admission waitlist')
+  @ApiOperation({
+    summary: 'Offer a free seat to the next candidate',
+    description:
+      'The next pending entry of the section (priority, then position) is offered the seat, which it holds until answered. A candidate who enrolled here meanwhile is withdrawn. Nothing is offered when the section is full or nobody waits.',
+  })
+  @ApiOkResponse({ type: WaitlistOfferDto })
+  @ApiErrorResponses(...WRITE_ERRORS)
+  async offer(
+    @CurrentAuth() auth: AuthContext,
+    @Campus() campus: CampusAccess,
+    @Body() body: OfferWaitlistDto,
+  ): Promise<WaitlistOfferDto> {
+    const entry = await this.waitlist.offerNext(
+      auth.user.id,
+      campus.school.id,
+      body.academicCycleSectionId,
+    );
+    return entry
+      ? { entry: await this.view(campus.school.id, entry.id), message: null }
+      : { entry: null, message: WaitlistMessages.nothingToOffer };
+  }
+
+  @Post(':id/accept')
+  @HttpCode(HttpStatus.OK)
+  @RequireVerifiedEmail()
+  @RequirePermission('manage admission waitlist')
+  @ApiOperation({
+    summary: 'The candidate takes the offered seat',
+    description:
+      'Places the learner in the section: a new enrollment, or their earlier one here opened again. Refused for a learner enrolled elsewhere or working as staff.',
+  })
+  @ApiOkResponse({ type: StudentDto })
+  @ApiErrorResponses(...WRITE_ERRORS)
+  async accept(
+    @CurrentAuth() auth: AuthContext,
+    @Campus() campus: CampusAccess,
+    @Param('id', ParseUUIDPipe) id: string,
+  ): Promise<StudentDto> {
+    return this.views.student(
+      await this.waitlist.accept(auth.user.id, campus.school.id, id),
+    );
+  }
+
+  @Post(':id/decline')
+  @HttpCode(HttpStatus.OK)
+  @RequireVerifiedEmail()
+  @RequirePermission('manage admission waitlist')
+  @ApiOperation({
+    summary: 'Decline an open entry',
+    description: 'A decided entry cannot be decided again.',
+  })
+  @ApiOkResponse({ type: WaitlistEntryDto })
+  @ApiErrorResponses(...WRITE_ERRORS)
+  async decline(
+    @CurrentAuth() auth: AuthContext,
+    @Campus() campus: CampusAccess,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() body: ReasonDto,
+  ): Promise<WaitlistEntryDto> {
+    await this.waitlist.decline(
+      auth.user.id,
+      campus.school.id,
+      id,
+      body.reason ?? null,
+    );
+    return this.view(campus.school.id, id);
+  }
+
+  private async view(schoolId: string, id: string): Promise<WaitlistEntryDto> {
+    const entry = await this.waitlist.find(schoolId, id);
+    const views = await this.waitlist.list(schoolId, {
+      academicCycleSectionId: entry.academicCycleSectionId,
+    });
+    return entryDto(views.find((view) => view.entry.id === id)!);
   }
 }

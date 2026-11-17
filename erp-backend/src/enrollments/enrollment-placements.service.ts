@@ -17,6 +17,7 @@ import {
 } from './enrollment.constants.js';
 import { EnrollmentPlacement } from './entities/enrollment-placement.entity.js';
 import { StudentRecord } from './entities/student-record.entity.js';
+import { WaitlistWithdrawals } from './waitlist-withdrawals.service.js';
 
 export const PlacementMessages = {
   closed: 'This enrollment is closed. It cannot take a new placement.',
@@ -51,6 +52,7 @@ export class EnrollmentPlacements {
     private readonly sections: CycleSections,
     private readonly audit: AuditService,
     private readonly clock: Clock,
+    private readonly waitlist: WaitlistWithdrawals,
   ) {}
 
   place(input: PlaceInput): Promise<StudentRecord> {
@@ -130,6 +132,8 @@ export class EnrollmentPlacements {
        DO UPDATE SET academic_cycle_section_id = EXCLUDED.academic_cycle_section_id, updated_at = now()`,
       [enrollment.id, year.id, section.id],
     );
+    // A learner with a place here no longer waits for one.
+    await this.waitlist.withdrawForEnrolledIn(manager, saved, input.actorId);
     await this.audit.record(manager, {
       action: AuditAction.EnrollmentPlaced,
       subject: { type: ENROLLMENT_SUBJECT, id: enrollment.id },
