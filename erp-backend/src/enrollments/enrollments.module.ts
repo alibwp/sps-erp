@@ -107,6 +107,7 @@ export const EnrollmentRuleMessages = {
     Transfers,
     GuardianLinks,
     StudentViews,
+    CampusMoves,
   ],
 })
 export class EnrollmentsModule implements OnModuleInit {
