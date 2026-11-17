@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { SectionHeading } from "@/components/ui/misc";
 import { ACTIVITY_LOG, LOG_TONES } from "@/lib/activity-log";
 import { formatDate } from "@/lib/utils";
+import { DemoDataNotice } from "@/components/ui/demo";
 
 export const metadata: Metadata = { title: "Activity logs" };
 
@@ -12,6 +13,7 @@ export default function ActivityLogsPage() {
   return (
     <Page title="Activity logs" breadcrumbs={[{ label: "Activity logs" }]}>
       <div className="grid gap-10">
+        <DemoDataNotice className="mb-0" />
         <BackendStatus />
         <section aria-labelledby="logs-heading" className="grid gap-4">
           <SectionHeading title="Recent activity" id="logs-heading" />

@@ -3,7 +3,22 @@ import { ChevronRight, House, Inbox, type LucideIcon } from "lucide-react";
 import type { ComponentProps, ReactNode } from "react";
 import { cn, initials } from "@/lib/utils";
 
-export function Avatar({ name, size = "md", className }: { name: string; size?: "sm" | "md" | "lg" | "xl"; className?: string }) {
+/**
+ * Initials in a colored circle, covered by the photo when there is one. Photo
+ * links expire, so a photo that fails to load hides itself and the initials
+ * show through. (Pass `src` only from client components: it adds an onError.)
+ */
+export function Avatar({
+  name,
+  src,
+  size = "md",
+  className,
+}: {
+  name: string;
+  src?: string | null;
+  size?: "sm" | "md" | "lg" | "xl";
+  className?: string;
+}) {
   const sizes = { sm: "size-8 text-xs", md: "size-9 text-xs", lg: "size-12 text-sm", xl: "size-20 text-xl" };
   // A stable hue per name keeps avatars distinguishable without photos.
   let hash = 0;
@@ -12,10 +27,26 @@ export function Avatar({ name, size = "md", className }: { name: string; size?: 
   return (
     <span
       aria-hidden
-      className={cn("inline-flex shrink-0 items-center justify-center rounded-full border font-semibold", sizes[size], className)}
+      className={cn(
+        "relative inline-flex shrink-0 items-center justify-center overflow-hidden rounded-full border font-semibold",
+        sizes[size],
+        className,
+      )}
       style={{ backgroundColor: `hsl(${hue} 45% 50% / 0.14)`, color: `hsl(${hue} 45% 38%)` }}
     >
       <span className="dark:brightness-[1.8]">{initials(name)}</span>
+      {src && (
+        // eslint-disable-next-line @next/next/no-img-element -- signed backend link, not a static asset
+        <img
+          key={src}
+          src={src}
+          alt=""
+          className="absolute inset-0 size-full object-cover"
+          onError={(event) => {
+            event.currentTarget.style.display = "none";
+          }}
+        />
+      )}
     </span>
   );
 }

@@ -2,6 +2,7 @@ import { ConfigService } from '@nestjs/config';
 import { NestFactory } from '@nestjs/core';
 import { Logger } from 'nestjs-pino';
 import { AppModule } from './app.module.js';
+import { startLiveDemoAccounts } from './demo/live-demo-accounts.js';
 import { setupApp } from './setup-app.js';
 
 async function bootstrap() {
@@ -12,8 +13,17 @@ async function bootstrap() {
   // `docker compose down`.
   app.enableShutdownHooks();
 
-  const port = app.get(ConfigService).get<string>('PORT', '5000');
+  const config = app.get(ConfigService);
+  const port = config.get<string>('PORT', '5000');
   await app.listen(port);
   app.get(Logger).log(`SPS ERP backend listening on port ${port}`, 'Bootstrap');
+
+  // The live backend makes its demo accounts once; elsewhere this does
+  // nothing.
+  startLiveDemoAccounts(
+    app,
+    config.get<string>('RAILWAY_PUBLIC_DOMAIN'),
+    app.get(Logger),
+  );
 }
 await bootstrap();

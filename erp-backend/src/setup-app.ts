@@ -16,19 +16,25 @@ const LOCAL_FRONTEND_ORIGINS = [
 ];
 
 // Frontend origins allowed to call this API: CORS_ORIGIN, comma-separated.
-// Unset, the local frontend is allowed, or in production the live one. The
-// origin of FRONTEND_URL (where the emailed links lead) is always allowed.
+// Unset, the local frontend is allowed. In production the live frontend is
+// always allowed, whatever CORS_ORIGIN says. The origin of FRONTEND_URL
+// (where the emailed links lead) is always allowed.
 export function corsOrigins(config: ConfigService): string[] {
+  const production = config.get<string>('NODE_ENV') === 'production';
   const configured = config.get<string>('CORS_ORIGIN')?.trim();
   const origins = configured
     ? configured.split(',').map((origin) => origin.trim())
-    : config.get<string>('NODE_ENV') === 'production'
-      ? [LIVE_FRONTEND_ORIGIN]
+    : production
+      ? []
       : LOCAL_FRONTEND_ORIGINS;
   const frontend = originOf(config.get<string>('FRONTEND_URL'));
-  return [...new Set([...origins, ...(frontend ? [frontend] : [])])].filter(
-    Boolean,
-  );
+  return [
+    ...new Set([
+      ...(production ? [LIVE_FRONTEND_ORIGIN] : []),
+      ...origins,
+      ...(frontend ? [frontend] : []),
+    ]),
+  ].filter(Boolean);
 }
 
 function originOf(url: string | undefined): string | null {

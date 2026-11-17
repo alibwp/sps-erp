@@ -12,7 +12,7 @@ export function FeesCollectedTrend() {
   const collected = FEES_BY_MONTH.reduce((sum, month) => sum + month.collected, 0);
 
   return (
-    <Trend id="trend-fees" title="Fees collected" period="Last 6 months" value={formatMoney(collected)} detail={`of ${formatMoney(billed)} billed`}>
+    <Trend sample id="trend-fees" title="Fees collected" period="Last 6 months" value={formatMoney(collected)} detail={`of ${formatMoney(billed)} billed`}>
       <BarChart
         data={FEES_BY_MONTH}
         xKey="month"
@@ -34,7 +34,7 @@ export function OwedTrend() {
   const largest = Math.max(1, ...OWED_BY_LATENESS.map((bucket) => bucket.owed));
 
   return (
-    <Trend id="trend-owed" title="Owed" period="By how late" value={formatMoney(owedTotal)} detail={`${formatMoney(lateTotal)} late`}>
+    <Trend sample id="trend-owed" title="Owed" period="By how late" value={formatMoney(owedTotal)} detail={`${formatMoney(lateTotal)} late`}>
       <ul className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-x-3 gap-y-3 text-sm">
         {OWED_BY_LATENESS.map((bucket, index) => (
           <li key={bucket.label} className="contents">
@@ -66,6 +66,7 @@ export function MoneyInOutTrend() {
 
   return (
     <Trend
+      sample
       id="trend-cash"
       title="Money in and out"
       period="Last 6 months"

@@ -9,11 +9,63 @@ import { useSidebar } from "@/components/layout/sidebar-context";
 import { Select } from "@/components/ui/form";
 import { Avatar } from "@/components/ui/misc";
 import { useToast } from "@/components/ui/toast";
-import { useSession } from "@/components/auth/session";
+import { switchCampus, useAccess, useSession, useWorkingContext } from "@/components/auth/session";
+import { messageOf } from "@/lib/use-api";
 import { isActive, navigationFor, type NavItem, type NavLink } from "@/lib/nav";
 import { cn } from "@/lib/utils";
 
-const CAMPUSES = ["SPS Army School — Main Campus", "SPS Army School — Westridge", "SPS Girls Campus"];
+/**
+ * The working campus. Someone with one campus sees its name; someone with
+ * several (an organization administrator, a teacher at two campuses, the
+ * platform administrator) picks one, and the whole app follows.
+ */
+function CampusPicker() {
+  const toast = useToast();
+  const { campus, campuses } = useWorkingContext();
+  const [switching, setSwitching] = useState(false);
+
+  if (campuses.length === 0) return null;
+  if (campuses.length === 1) {
+    return (
+      <span className="truncate px-1 text-xs text-sidebar-foreground/70" title={campuses[0].organization.name}>
+        {campuses[0].name}
+      </span>
+    );
+  }
+
+  async function change(schoolId: string) {
+    const next = campuses.find((item) => item.id === schoolId);
+    setSwitching(true);
+    try {
+      await switchCampus(schoolId);
+      toast({ title: "Working campus changed", description: next?.name });
+    } catch (error) {
+      toast({ title: "Could not change the campus", description: messageOf(error), tone: "error" });
+    } finally {
+      setSwitching(false);
+    }
+  }
+
+  return (
+    <label className="flex min-w-0 flex-col gap-1">
+      <span className="px-1 text-xs font-medium text-sidebar-foreground/70">Working campus</span>
+      <Select
+        className="h-10 bg-background text-xs"
+        value={campus?.id ?? ""}
+        disabled={switching}
+        aria-busy={switching}
+        onChange={(event) => void change(event.target.value)}
+      >
+        {campus === null && <option value="">Pick a campus</option>}
+        {campuses.map((item) => (
+          <option key={item.id} value={item.id}>
+            {item.name}
+          </option>
+        ))}
+      </Select>
+    </label>
+  );
+}
 
 const linkBase =
   "flex h-9 w-full min-w-0 items-center gap-2 rounded-md px-2 text-sm text-sidebar-foreground outline-none transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:ring-2 focus-visible:ring-ring [&>svg]:size-4 [&>svg]:shrink-0";
@@ -21,8 +73,8 @@ const linkActive = "bg-sidebar-accent font-medium text-sidebar-accent-foreground
 
 function SidebarBody({ collapsed, onNavigate }: { collapsed: boolean; onNavigate?: () => void }) {
   const pathname = usePathname();
-  const toast = useToast();
   const { role: user } = useSession();
+  const access = useAccess();
 
   return (
     <>
@@ -31,29 +83,11 @@ function SidebarBody({ collapsed, onNavigate }: { collapsed: boolean; onNavigate
           <Logo className="size-8" />
           {!collapsed && <span className="truncate text-sm font-semibold">{APP_NAME}</span>}
         </Link>
-        {!collapsed && user.id !== "platform-admin" && (
-          // Someone who belongs to one school sees its name; only the platform
-          // administrator, who works across every school, can switch.
-          <span className="truncate px-1 text-xs text-sidebar-foreground/70">{CAMPUSES[0]}</span>
-        )}
-        {!collapsed && user.id === "platform-admin" && (
-          <label className="flex min-w-0 flex-col gap-1">
-            <span className="px-1 text-xs font-medium text-sidebar-foreground/70">Working school</span>
-            <Select
-              className="h-10 bg-background text-xs"
-              defaultValue={CAMPUSES[0]}
-              onChange={(event) => toast({ title: "Working school changed", description: event.target.value })}
-            >
-              {CAMPUSES.map((campus) => (
-                <option key={campus}>{campus}</option>
-              ))}
-            </Select>
-          </label>
-        )}
+        {!collapsed && <CampusPicker />}
       </div>
 
       <nav aria-label="Main" className="beautify-scrollbar min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-2 pb-4">
-        {navigationFor(user.id).map((group) => (
+        {navigationFor(user.id, access).map((group) => (
           <div key={group.label} className="py-2">
             {collapsed ? (
               <div className="mx-2 mb-2 border-t border-sidebar-border first:hidden" aria-hidden />
@@ -78,7 +112,7 @@ function SidebarBody({ collapsed, onNavigate }: { collapsed: boolean; onNavigate
           title={collapsed ? user.name : undefined}
           className={cn(linkBase, "h-11", collapsed && "w-10 justify-center px-0", isActive(pathname, "/profile") && linkActive)}
         >
-          <Avatar name={user.name} size="sm" />
+          <Avatar name={user.name} src={user.photoUrl} size="sm" />
           {!collapsed && (
             <span className="min-w-0">
               <span className="block truncate">{user.name}</span>

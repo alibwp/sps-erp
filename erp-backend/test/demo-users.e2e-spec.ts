@@ -1,11 +1,16 @@
 import type { INestApplication } from '@nestjs/common';
 import { DataSource } from 'typeorm';
 import {
+  LIVE_RAILWAY_DOMAIN,
+  makeLiveDemoAccountsOnce,
+} from '../src/demo/live-demo-accounts.js';
+import {
   DEMO_ACCOUNTS,
   removeDemoUsers,
   seedDemoUsers,
 } from '../src/demo/seed-demo-users.js';
 import { InvitationService } from '../src/identity/invitations/invitation.service.js';
+import { PasswordHasher } from '../src/identity/password-hasher.js';
 import { MailService } from '../src/mail/mail.service.js';
 import {
   PASSWORD,
@@ -284,5 +289,48 @@ describe('Demo accounts (e2e)', () => {
     // Seeding again switches them back on.
     await seedDemoUsers(app, { password: PASSWORD });
     await signIn(app, TEACHER);
+  });
+
+  describe('on the live start-up', () => {
+    beforeEach(async () => {
+      await truncateAllTables();
+    });
+
+    it('does nothing off the live Railway domain', async () => {
+      expect(await makeLiveDemoAccountsOnce(app, undefined)).toBe('not-live');
+      expect(
+        await makeLiveDemoAccountsOnce(app, 'sps-erp-staging.up.railway.app'),
+      ).toBe('not-live');
+      expect(await count('users')).toBe(0);
+    });
+
+    it('makes the accounts from the stored hash, ready to sign in', async () => {
+      const hash = await app.get(PasswordHasher).hash(PASSWORD);
+
+      expect(
+        await makeLiveDemoAccountsOnce(app, LIVE_RAILWAY_DOMAIN, hash),
+      ).toBe('made');
+
+      expect(await count('users')).toBe(DEMO_ACCOUNTS.length);
+      expect(await userRow('platformadministrator@gmail.com')).toEqual(
+        SIGN_IN_ONLY,
+      );
+      await signIn(app, 'platformadministrator@gmail.com');
+      expect(mail.sent).toHaveLength(0);
+    });
+
+    it('does nothing once any demo account has existed, even archived', async () => {
+      await seedDemoUsers(app, { password: PASSWORD });
+      await removeDemoUsers(app);
+
+      expect(await makeLiveDemoAccountsOnce(app, LIVE_RAILWAY_DOMAIN)).toBe(
+        'already-made',
+      );
+      expect(
+        await dataSource.query(
+          'SELECT DISTINCT account_status FROM users WHERE demo_account',
+        ),
+      ).toEqual([{ account_status: 'archived' }]);
+    });
   });
 });

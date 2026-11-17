@@ -4,6 +4,7 @@ import Link from "next/link";
 import { ArrowUpRight, Download } from "lucide-react";
 import { usePortalLearner } from "@/components/portal/portal-views";
 import { ReportDownload } from "@/components/screens/report-download";
+import { DemoDataNotice } from "@/components/ui/demo";
 import { SectionHeading } from "@/components/ui/misc";
 import { formatDate } from "@/lib/utils";
 
@@ -22,6 +23,7 @@ export function PortalDashboard({ showProfile }: { showProfile: boolean }) {
 
   return (
     <div className="space-y-10">
+      <DemoDataNotice what="The family portal" className="mb-0" />
       <section className="min-w-0" aria-labelledby="notices-overview">
         <SectionHeading title="Notices" id="notices-overview">
           <Link href="/portal/notices" className="inline-flex min-h-10 select-none items-center gap-1 text-sm text-muted-foreground hover:text-foreground">

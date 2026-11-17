@@ -31,6 +31,27 @@ describe('corsOrigins', () => {
     ).toEqual(['https://sps-erp-phi.vercel.app']);
   });
 
+  it('allows the live frontend in production even when CORS_ORIGIN leaves it out', () => {
+    expect(
+      corsOrigins(
+        new ConfigService({
+          NODE_ENV: 'production',
+          CORS_ORIGIN: 'http://localhost:3000,https://erp.example.com',
+        }),
+      ),
+    ).toEqual([
+      'https://sps-erp-phi.vercel.app',
+      'http://localhost:3000',
+      'https://erp.example.com',
+    ]);
+    // Outside production CORS_ORIGIN is the whole list.
+    expect(
+      corsOrigins(
+        new ConfigService({ CORS_ORIGIN: 'https://erp.example.com' }),
+      ),
+    ).toEqual(['https://erp.example.com']);
+  });
+
   it('always allows the origin of FRONTEND_URL', () => {
     expect(
       corsOrigins(

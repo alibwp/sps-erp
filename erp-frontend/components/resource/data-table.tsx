@@ -1,47 +1,104 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowDown, ArrowUp, ArrowUpDown, ArrowUpRight, Ellipsis, Eye, Pencil, Search, Trash2 } from "lucide-react";
-import { useMemo, useState } from "react";
+import {
+  ArrowDown,
+  ArrowUp,
+  ArrowUpDown,
+  ArrowUpRight,
+  CircleAlert,
+  Ellipsis,
+  Eye,
+  LoaderCircle,
+  Pencil,
+  Search,
+  Trash2,
+} from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
 import { Cell, cellText } from "@/components/resource/cell";
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/dialog";
 import { DropdownMenu, DropdownMenuItem, DropdownMenuLink, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 import { Input, Select } from "@/components/ui/form";
-import { EmptyState } from "@/components/ui/misc";
+import { Alert, EmptyState } from "@/components/ui/misc";
 import { useToast } from "@/components/ui/toast";
-import { useSession } from "@/components/auth/session";
+import { useAccess, useSession } from "@/components/auth/session";
+import { withQuery, type Paginated } from "@/lib/api";
 import { canChange } from "@/lib/nav";
-import { getResource, rowTitle, type Column, type Row } from "@/lib/resources";
+import { getResource, itemPath, rowTitle, type Column, type Resource, type Row } from "@/lib/resources";
+import { useApiMutation, useApiQuery } from "@/lib/use-api";
 import { cn } from "@/lib/utils";
 
 const PER_PAGE_OPTIONS = [10, 25, 50];
+const SEARCH_DELAY_MS = 300;
+
+type Sort = { key: string; direction: "asc" | "desc" };
 
 type Props = {
   slug: string;
-  /** Show only rows where `filter.key` equals `filter.value`. */
+  /** Demo lists: show only rows where `filter.key` equals `filter.value`. */
   filter?: { key: string; value: string };
+  /** Live lists: extra query parameters, e.g. { levelId: "…" }. */
+  params?: Record<string, string>;
   /** A smaller table for record pages: no search, five rows a page. */
   compact?: boolean;
 };
 
 /** The searchable, sortable, paginated table every list screen uses. */
-export function ResourceTable({ slug, filter, compact = false }: Props) {
+export function ResourceTable({ slug, filter, params, compact = false }: Props) {
   const resource = getResource(slug);
+  if (!resource) return null;
+  return <Table resource={resource} filter={filter} params={params} compact={compact} />;
+}
+
+function Table({ resource, filter, params, compact = false }: Omit<Props, "slug"> & { resource: Resource }) {
   const toast = useToast();
   const [deleted, setDeleted] = useState<Set<string>>(() => new Set());
   const [query, setQuery] = useState("");
-  const [sort, setSort] = useState<{ key: string; direction: "asc" | "desc" } | null>(null);
+  const [sort, setSort] = useState<Sort | null>(null);
   const [perPage, setPerPage] = useState(compact ? 5 : 10);
   const [page, setPage] = useState(1);
   const [pendingDelete, setPendingDelete] = useState<Row | null>(null);
+  const { role } = useSession();
+  const access = useAccess();
+  const removal = useApiMutation();
 
-  const columns = useMemo(() => (resource?.columns ?? []).filter((column) => !column.detailOnly), [resource]);
+  const api = resource.api;
+  const serverPaged = api?.paged === true;
+  const search = useDebounced(query.trim(), SEARCH_DELAY_MS);
 
-  const visibleRows = useMemo(() => {
-    if (!resource) return [];
-    let result = resource.rows.filter((row) => !deleted.has(row.id));
-    if (filter) result = result.filter((row) => String(row[filter.key]) === filter.value);
+  // ----- Where the rows come from --------------------------------------------
+  // Demo screens: resource.rows. Live screens: the backend, which does the
+  // searching, sorting and paging itself when its list is paged.
+  let listPath: string | null = null;
+  if (api) {
+    const sortField = sort && api.sort?.[sort.key];
+    listPath = withQuery(api.path, {
+      ...api.query,
+      ...params,
+      ...(serverPaged
+        ? {
+            page,
+            perPage,
+            search,
+            sort: sortField ? `${sort.direction === "desc" ? "-" : ""}${sortField}` : undefined,
+          }
+        : {}),
+    });
+  }
+  const live = useApiQuery<Paginated<unknown> | unknown[]>(listPath, { keepPrevious: true });
+
+  const sourceRows = useMemo<Row[]>(() => {
+    if (!api) return resource.rows;
+    const records = Array.isArray(live.data) ? live.data : (live.data?.data ?? []);
+    return records.map((record) => api.toRow(record as never));
+  }, [api, resource.rows, live.data]);
+
+  // Searching, sorting and filtering done here (demo and unpaged live lists).
+  const localRows = useMemo(() => {
+    if (serverPaged) return sourceRows;
+    let result = sourceRows.filter((row) => !deleted.has(row.id));
+    if (filter && !api) result = result.filter((row) => String(row[filter.key]) === filter.value);
     const needle = query.trim().toLowerCase();
     if (needle) {
       result = result.filter((row) =>
@@ -58,16 +115,20 @@ export function ResourceTable({ slug, filter, compact = false }: Props) {
       });
     }
     return result;
-  }, [resource, deleted, filter, query, sort]);
-  const { role } = useSession();
+  }, [serverPaged, sourceRows, deleted, filter, api, query, sort, resource.columns]);
 
-  if (!resource) return null;
+  const columns = resource.columns.filter((column) => !column.detailOnly);
 
-  const pageCount = Math.max(1, Math.ceil(visibleRows.length / perPage));
+  const total = serverPaged && !Array.isArray(live.data) ? (live.data?.meta.total ?? 0) : localRows.length;
+  const pageCount = Math.max(1, Math.ceil(total / perPage));
   const currentPage = Math.min(page, pageCount);
   const start = (currentPage - 1) * perPage;
-  const pageRows = visibleRows.slice(start, start + perPage);
-  const editable = Boolean(resource.form) && canChange(role.id, `/${resource.slug}`);
+  const pageRows = serverPaged ? localRows : localRows.slice(start, start + perPage);
+  const editable = Boolean(resource.form) && canChange(role.id, `/${resource.slug}`, access);
+  const deletable = !api || api.remove === true;
+  const firstLoad = live.loading && live.data === undefined;
+
+  const sortable = (column: Column) => !serverPaged || Boolean(api?.sort?.[column.key]);
 
   const toggleSort = (column: Column) => {
     setSort((current) =>
@@ -77,6 +138,23 @@ export function ResourceTable({ slug, filter, compact = false }: Props) {
           ? { key: column.key, direction: "desc" }
           : null,
     );
+    setPage(1);
+  };
+
+  const confirmDelete = async (row: Row) => {
+    const title = rowTitle(resource, row);
+    if (!api) {
+      setDeleted((current) => new Set(current).add(row.id));
+      toast({ title: `${title} deleted`, description: "Demo data only — the backend is not connected yet." });
+      return;
+    }
+    const result = await removal.send(itemPath(api, row.id), { method: "DELETE" });
+    if (result.ok) {
+      toast({ title: `${title} deleted` });
+      live.reload();
+    } else {
+      toast({ title: `${title} was not deleted`, description: result.error.message, tone: "error" });
+    }
   };
 
   return (
@@ -97,13 +175,25 @@ export function ResourceTable({ slug, filter, compact = false }: Props) {
               className="h-10 pl-9"
             />
           </div>
-          <p className="text-sm text-muted-foreground">
-            {visibleRows.length} {visibleRows.length === 1 ? "record" : "records"}
+          <p className="flex items-center gap-2 text-sm text-muted-foreground">
+            {live.loading && !firstLoad && <LoaderCircle className="size-4 animate-spin" aria-label="Loading" />}
+            {firstLoad ? "Loading..." : `${total} ${total === 1 ? "record" : "records"}`}
           </p>
         </div>
       )}
 
-      <div className="relative max-w-full overflow-x-auto rounded-lg border beautify-scrollbar">
+      {live.error && (
+        <Alert tone="destructive" icon={CircleAlert} title={`${resource.title} could not be loaded`}>
+          <span className="flex flex-wrap items-center gap-3">
+            {live.error.message}
+            <Button variant="outline" size="sm" onClick={live.reload}>
+              Try again
+            </Button>
+          </span>
+        </Alert>
+      )}
+
+      <div className="relative max-w-full overflow-x-auto rounded-lg border beautify-scrollbar" aria-busy={live.loading}>
         <table className="w-full caption-bottom text-sm">
           <thead className="bg-muted/50">
             <tr className="border-b">
@@ -117,14 +207,18 @@ export function ResourceTable({ slug, filter, compact = false }: Props) {
                     aria-sort={active ? (sort.direction === "asc" ? "ascending" : "descending") : undefined}
                     className="h-11 whitespace-nowrap px-4 text-left align-middle font-medium text-muted-foreground"
                   >
-                    <button
-                      type="button"
-                      onClick={() => toggleSort(column)}
-                      className="-ml-2 inline-flex h-8 items-center gap-1.5 rounded-md px-2 hover:bg-accent hover:text-accent-foreground"
-                    >
-                      {column.label}
-                      <SortIcon className={cn("size-3.5", !active && "opacity-40")} aria-hidden />
-                    </button>
+                    {sortable(column) ? (
+                      <button
+                        type="button"
+                        onClick={() => toggleSort(column)}
+                        className="-ml-2 inline-flex h-8 items-center gap-1.5 rounded-md px-2 hover:bg-accent hover:text-accent-foreground"
+                      >
+                        {column.label}
+                        <SortIcon className={cn("size-3.5", !active && "opacity-40")} aria-hidden />
+                      </button>
+                    ) : (
+                      column.label
+                    )}
                   </th>
                 );
               })}
@@ -133,7 +227,7 @@ export function ResourceTable({ slug, filter, compact = false }: Props) {
               </th>
             </tr>
           </thead>
-          <tbody>
+          <tbody className={cn(live.loading && !firstLoad && "opacity-60")}>
             {pageRows.map((row) => {
               const title = rowTitle(resource, row);
               const href = `/${resource.slug}/${row.id}`;
@@ -165,10 +259,14 @@ export function ResourceTable({ slug, filter, compact = false }: Props) {
                         <DropdownMenuLink href={`${href}/edit`}>
                           <Pencil /> Edit {resource.singular.toLowerCase()}
                         </DropdownMenuLink>
-                        <DropdownMenuSeparator />
-                        <DropdownMenuItem destructive onClick={() => setPendingDelete(row)}>
-                          <Trash2 /> Delete
-                        </DropdownMenuItem>
+                        {deletable && (
+                          <>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem destructive onClick={() => setPendingDelete(row)}>
+                              <Trash2 /> Delete
+                            </DropdownMenuItem>
+                          </>
+                        )}
                       </DropdownMenu>
                     ) : (
                       <Link
@@ -185,7 +283,12 @@ export function ResourceTable({ slug, filter, compact = false }: Props) {
             })}
           </tbody>
         </table>
-        {pageRows.length === 0 && (
+        {firstLoad && (
+          <div className="flex items-center justify-center gap-2 px-6 py-12 text-sm text-muted-foreground">
+            <LoaderCircle className="size-4 animate-spin" aria-hidden /> Loading {resource.title.toLowerCase()}...
+          </div>
+        )}
+        {!firstLoad && !live.error && pageRows.length === 0 && (
           <EmptyState
             title={query ? "Nothing matches your search" : `No ${resource.title.toLowerCase()} yet`}
             description={query ? "Try a different name or clear the search." : resource.description}
@@ -193,12 +296,12 @@ export function ResourceTable({ slug, filter, compact = false }: Props) {
         )}
       </div>
 
-      {visibleRows.length > perPage || !compact ? (
+      {total > perPage || !compact ? (
         <div className="flex flex-wrap items-center justify-between gap-3">
           <p className="text-sm text-muted-foreground">
-            {visibleRows.length === 0
+            {total === 0
               ? "No results"
-              : `Showing ${start + 1} to ${Math.min(start + perPage, visibleRows.length)} of ${visibleRows.length} results`}
+              : `Showing ${start + 1} to ${Math.min(start + perPage, total)} of ${total} results`}
           </p>
           <div className="flex flex-wrap items-center gap-2">
             {!compact && (
@@ -237,14 +340,21 @@ export function ResourceTable({ slug, filter, compact = false }: Props) {
         open={pendingDelete !== null}
         onClose={() => setPendingDelete(null)}
         title={pendingDelete ? `Delete ${rowTitle(resource, pendingDelete)}?` : "Delete?"}
-        description="This removes the record from the list. It cannot be undone."
+        description={api ? "This deletes the record. It cannot be undone." : "This removes the record from the list. It cannot be undone."}
         onConfirm={() => {
-          if (!pendingDelete) return;
-          const title = rowTitle(resource, pendingDelete);
-          setDeleted((current) => new Set(current).add(pendingDelete.id));
-          toast({ title: `${title} deleted`, description: "Demo data only — the backend is not connected yet." });
+          if (pendingDelete) void confirmDelete(pendingDelete);
         }}
       />
     </div>
   );
+}
+
+/** `value`, updated only after it has stopped changing for `delay` ms. */
+function useDebounced<T>(value: T, delay: number): T {
+  const [settled, setSettled] = useState(value);
+  useEffect(() => {
+    const timer = window.setTimeout(() => setSettled(value), delay);
+    return () => window.clearTimeout(timer);
+  }, [value, delay]);
+  return settled;
 }
