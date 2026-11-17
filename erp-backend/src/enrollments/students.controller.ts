@@ -5,6 +5,7 @@ import {
   Get,
   HttpCode,
   HttpStatus,
+  NotFoundException,
   Param,
   ParseUUIDPipe,
   Patch,
@@ -38,7 +39,9 @@ import {
   type AuthContext,
   CurrentAuth,
 } from '../identity/auth/auth-context.js';
+import { GuardianLinks } from './guardian-links.service.js';
 import { StudentViews } from './student-views.service.js';
+import type { StudentRecord } from './entities/student-record.entity.js';
 import {
   AdmitStudentDto,
   ChangeEnrollmentStatusDto,
@@ -49,7 +52,7 @@ import {
   StudentListQueryDto,
   UpdateStudentDto,
 } from './students.dto.js';
-import { Students } from './students.service.js';
+import { STUDENT_NOT_FOUND, Students } from './students.service.js';
 
 const ERRORS = [
   HttpStatus.BAD_REQUEST,
@@ -71,6 +74,7 @@ export class StudentsController {
     private readonly dataSource: DataSource,
     private readonly students: Students,
     private readonly views: StudentViews,
+    private readonly guardians: GuardianLinks,
   ) {}
 
   @Get()
@@ -79,10 +83,21 @@ export class StudentsController {
   @ApiOkResponse({ type: [StudentDto] })
   @ApiErrorResponses(...ERRORS)
   async list(
+    @CurrentAuth() auth: AuthContext,
     @Campus() campus: CampusAccess,
     @Query() query: StudentListQueryDto,
   ): Promise<Paginated<StudentDto>> {
-    const page = await this.students.list(campus.school.id, query);
+    // A guardian with no staff role here sees only their own children.
+    const childrenOf = (await this.guardians.readsOnlyAsGuardian(
+      auth.user.id,
+      campus.school.id,
+    ))
+      ? auth.user.id
+      : undefined;
+    const page = await this.students.list(campus.school.id, {
+      ...query,
+      childrenOf,
+    });
     return { data: await this.views.students(page.data), meta: page.meta };
   }
 
@@ -118,12 +133,11 @@ export class StudentsController {
   @ApiOkResponse({ type: StudentDto })
   @ApiErrorResponses(...ERRORS)
   async show(
+    @CurrentAuth() auth: AuthContext,
     @Campus() campus: CampusAccess,
     @Param('id', ParseUUIDPipe) id: string,
   ): Promise<StudentDto> {
-    return this.views.student(
-      await this.students.find(this.dataSource.manager, campus.school.id, id),
-    );
+    return this.views.student(await this.readable(auth, campus, id));
   }
 
   @Patch(':id')
@@ -202,14 +216,11 @@ export class StudentsController {
   @ApiOkResponse({ type: [PlacementHistoryDto] })
   @ApiErrorResponses(...ERRORS)
   async placements(
+    @CurrentAuth() auth: AuthContext,
     @Campus() campus: CampusAccess,
     @Param('id', ParseUUIDPipe) id: string,
   ): Promise<PlacementHistoryDto[]> {
-    const enrollment = await this.students.find(
-      this.dataSource.manager,
-      campus.school.id,
-      id,
-    );
+    const enrollment = await this.readable(auth, campus, id);
     return this.views.placements(enrollment.id);
   }
 
@@ -246,14 +257,34 @@ export class StudentsController {
   @ApiOkResponse({ type: [EnrollmentStatusHistoryDto] })
   @ApiErrorResponses(...ERRORS)
   async statuses(
+    @CurrentAuth() auth: AuthContext,
     @Campus() campus: CampusAccess,
     @Param('id', ParseUUIDPipe) id: string,
   ): Promise<EnrollmentStatusHistoryDto[]> {
-    const enrollment = await this.students.find(
-      this.dataSource.manager,
-      campus.school.id,
-      id,
-    );
+    const enrollment = await this.readable(auth, campus, id);
     return this.views.statuses(enrollment.id);
+  }
+
+  // A learner the person may read: a guardian with no staff role here
+  // reads only their own children; any other learner is not found
+  // (StudentController::show).
+  private async readable(
+    auth: AuthContext,
+    campus: CampusAccess,
+    id: string,
+  ): Promise<StudentRecord> {
+    const manager = this.dataSource.manager;
+    const enrollment = await this.students.find(manager, campus.school.id, id);
+    if (
+      (await this.guardians.readsOnlyAsGuardian(
+        auth.user.id,
+        campus.school.id,
+        manager,
+      )) &&
+      !(await this.guardians.isLinked(auth.user.id, enrollment.userId, manager))
+    ) {
+      throw new NotFoundException(STUDENT_NOT_FOUND);
+    }
+    return enrollment;
   }
 }

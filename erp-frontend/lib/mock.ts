@@ -6,12 +6,12 @@
 export const DEMO_TODAY = "2026-11-05";
 
 export const SCHOOL = {
-  name: "SPS School",
+  name: "SPS Army School",
   campus: "Main Campus, Rawalpindi",
   organization: "SPS Education System",
   academicYear: "2026/2027",
   term: "First Term",
-  email: "office@spsschool.edu.pk",
+  email: "office@spsarmyschool.edu.pk",
   phone: "+92 51 555 0142",
 };
 
@@ -60,7 +60,7 @@ const FEMALE_NAMES = new Set([
 ]);
 
 /** "Male" or "Female" from a person's first name (ignoring any title). */
-function genderOf(name: string): "Male" | "Female" {
+export function genderOf(name: string): "Male" | "Female" {
   const first = name.replace(/^(Mr|Ms|Mrs|Dr)\.\s+/, "").split(" ")[0];
   return FEMALE_NAMES.has(first) ? "Female" : "Male";
 }
@@ -70,7 +70,7 @@ export const CLASSES = [
   "Class 6", "Class 7", "Class 8", "Class 9", "Class 10",
 ];
 
-const SECTION_LETTERS = ["A", "B", "C"];
+export const SECTION_LETTERS = ["A", "B", "C"];
 
 export const SECTIONS = CLASSES.slice(2).flatMap((level) =>
   SECTION_LETTERS.slice(0, 2).map((letter) => `${level} ${letter}`),
@@ -80,6 +80,12 @@ export const SUBJECTS = [
   "English", "Urdu", "Mathematics", "General Science", "Physics", "Chemistry", "Biology",
   "Computer Science", "Islamiat", "Pakistan Studies", "Social Studies", "Art & Design",
 ];
+
+export const SUBJECT_CODES: Record<string, string> = {
+  English: "ENG", Urdu: "URD", Mathematics: "MTH", "General Science": "SCI", Physics: "PHY",
+  Chemistry: "CHE", Biology: "BIO", "Computer Science": "CSC", Islamiat: "ISL",
+  "Pakistan Studies": "PST", "Social Studies": "SST", "Art & Design": "ART",
+};
 
 function makePeople(seed: number, count: number, withTitle = false) {
   const random = createRandom(seed);
@@ -99,6 +105,10 @@ export const STUDENT_NAMES = makePeople(11, 48);
 export const TEACHER_NAMES = makePeople(23, 16, true);
 export const PARENT_NAMES = makePeople(37, 30);
 export const STAFF_NAMES = makePeople(53, 12);
+
+export function emailFor(name: string, domain = "spsarmyschool.edu.pk"): string {
+  return `${name.replace(/^(Mr|Ms|Mrs|Dr)\.\s+/, "").toLowerCase().replace(/[^a-z]+/g, ".")}@${domain}`;
+}
 
 /** Build `count` rows with ids "1".."count" from a seeded generator. */
 export function rows<T extends Record<string, unknown>>(

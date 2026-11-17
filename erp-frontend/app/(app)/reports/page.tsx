@@ -3,7 +3,6 @@ import { Download, FileSpreadsheet, FileText } from "lucide-react";
 import { Page } from "@/components/layout/page-header";
 import { ReportDownload } from "@/components/screens/report-download";
 import { Card, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-import { DemoDataNotice } from "@/components/ui/demo";
 
 export const metadata: Metadata = { title: "Reports" };
 
@@ -25,7 +24,6 @@ export default function ReportsPage() {
   return (
     <Page title="Reports" breadcrumbs={[{ label: "Reports" }]}>
       <div className="grid gap-10">
-        <DemoDataNotice className="mb-0" />
         {groups.map((group) => (
           <section key={group} aria-labelledby={`reports-${group}`} className="grid gap-4">
             <h2 id={`reports-${group}`} className="border-b pb-2 font-semibold">

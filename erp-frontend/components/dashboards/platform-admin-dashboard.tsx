@@ -1,33 +1,20 @@
-"use client";
-
 import Link from "next/link";
 import { ArrowUpRight, Building2, MailPlus, School, TriangleAlert } from "lucide-react";
-import { useMemo } from "react";
-import { switchCampus, useWorkingContext } from "@/components/auth/session";
 import { BackendStatus } from "@/components/backend-status";
-import { useAllAccounts } from "@/components/people/accounts";
 import { Badge } from "@/components/ui/badge";
-import { Button, ButtonLink } from "@/components/ui/button";
-import { SampleBadge } from "@/components/ui/demo";
+import { ButtonLink } from "@/components/ui/button";
 import { Alert, Avatar, SectionHeading } from "@/components/ui/misc";
-import { useToast } from "@/components/ui/toast";
 import { ACTIVITY_LOG, LOG_TONES } from "@/lib/activity-log";
-import { withQuery, type Paginated } from "@/lib/api";
-import { orgApi, type OrganizationDto, type OrgCampus } from "@/lib/organizations";
-import { peopleApi, type Invitation } from "@/lib/people";
-import { timeZoneLabel } from "@/lib/time-zones";
-import { messageOf, useApiQueries, useApiQuery } from "@/lib/use-api";
+import { getResource, type Row } from "@/lib/resources";
 import { formatDate, formatNumber } from "@/lib/utils";
 
 // The platform administrator works above any one school: every organization,
-// every campus, the people who run them, and the health of the system.
-// Organizations, campuses, people, roles and invitations come from the
-// backend; the activity log has no backend yet and is marked as sample data.
-// Per-campus enrolment is left out: the backend answers it one campus at a
-// time, and a dashboard should not show figures it cannot back.
+// every campus, the people who run them, and the health of the system. This
+// follows the reference's platform-scoped tools (organizations, campus health,
+// administrators, invitations, roles and the server log).
 
-/** Roles whose holders administer something. */
-const ADMIN_ROLES = new Set(["platform-admin", "organization-admin", "admin"]);
+const rowsOf = (slug: string): Row[] => getResource(slug)?.rows ?? [];
+const num = (value: Row[string]) => Number(value ?? 0);
 
 function SeeAll({ href, children }: { href: string; children: string }) {
   return (
@@ -37,59 +24,43 @@ function SeeAll({ href, children }: { href: string; children: string }) {
   );
 }
 
-const total = (query: { data?: Paginated<unknown> }) => (query.data ? formatNumber(query.data.meta.total) : null);
-
 export function PlatformAdminDashboard() {
-  const toast = useToast();
-  const { schoolId, campuses: myCampuses, can } = useWorkingContext();
+  const organizations = rowsOf("organizations");
+  const campuses = rowsOf("schools");
+  const admins = rowsOf("admins");
+  const invitations = rowsOf("account-invitations");
+  const roles = rowsOf("roles");
 
-  const organizations = useApiQuery<Paginated<OrganizationDto>>(`${orgApi.list}?perPage=100`, { keepPrevious: true });
-  const orgList = useMemo(() => organizations.data?.data ?? [], [organizations.data]);
-  const campusPages = useApiQueries<Paginated<OrgCampus>>(
-    organizations.data ? orgList.map((organization) => `${orgApi.campuses(organization.id)}?perPage=100`) : null,
-  );
-  const campuses = useMemo(
-    () =>
-      orgList.flatMap((organization, index) =>
-        (campusPages.data?.[index]?.data ?? []).map((campus) => ({ campus, organization })),
-      ),
-    [orgList, campusPages.data],
-  );
-
-  const manageAccess = Boolean(schoolId) && can("manage account access");
-  const people = useApiQuery<Paginated<unknown>>(manageAccess ? withQuery(peopleApi.accounts, { perPage: 1 }) : null);
-  const roles = useApiQuery<Paginated<unknown>>(schoolId && can("read role") ? withQuery(peopleApi.roles, { archived: "false", perPage: 1 }) : null);
-  const pending = useApiQuery<Paginated<Invitation>>(
-    manageAccess ? withQuery(peopleApi.invitations, { status: "pending", perPage: 5 }) : null,
-    { keepPrevious: true },
-  );
-  const accounts = useAllAccounts();
-  const admins = (accounts.data ?? []).filter((account) => account.roles.some((role) => ADMIN_ROLES.has(role.name)));
-
-  const needsSetup = campuses.filter(({ campus }) => !campus.setupDetailsCompletedAt);
-  const campusesLoaded = campusPages.data !== undefined || orgList.length === 0;
+  const totalStudents = campuses.reduce((sum, campus) => sum + num(campus.students), 0);
+  const totalTeachers = campuses.reduce((sum, campus) => sum + num(campus.teachers), 0);
+  const largestCampus = Math.max(1, ...campuses.map((campus) => num(campus.students)));
+  const needsSetup = campuses.filter((campus) => campus.status !== "Active");
+  const pendingInvitations = invitations.filter((invitation) => invitation.status === "Pending");
   const recentActivity = ACTIVITY_LOG.slice(0, 6);
+  const problems = ACTIVITY_LOG.filter((entry) => entry.level !== "Info").length;
 
-  const snapshot: Array<{ label: string; value: string | null; href: string }> = [
-    { label: "Organizations", value: organizations.data ? formatNumber(organizations.data.meta.total) : null, href: "/organizations" },
-    { label: "Campuses", value: campusesLoaded && organizations.data ? formatNumber(campuses.length) : null, href: "/schools" },
-    ...(manageAccess
-      ? [
-          { label: "People at this campus", value: total(people), href: "/admins" },
-          { label: "Pending invitations", value: total(pending), href: "/account-invitations" },
-        ]
-      : []),
-    ...(can("read role") ? [{ label: "Roles offered", value: total(roles), href: "/roles" }] : []),
+  // Campus counts and enrolment come from the campuses themselves so every
+  // total on this page agrees.
+  const organizationSummaries = organizations.map((organization) => {
+    const own = campuses.filter((campus) => campus.organization === organization.name);
+    return {
+      id: organization.id,
+      name: String(organization.name),
+      code: String(organization.code),
+      campusCount: own.length,
+      students: own.reduce((sum, campus) => sum + num(campus.students), 0),
+    };
+  });
+
+  const snapshot = [
+    { label: "Organizations", value: organizations.length, href: "/organizations" },
+    { label: "Campuses", value: campuses.length, href: "/schools" },
+    { label: "Active students", value: totalStudents, href: "/schools" },
+    { label: "Teachers", value: totalTeachers, href: "/schools" },
+    { label: "Administrators", value: admins.length, href: "/admins" },
+    { label: "Pending invitations", value: pendingInvitations.length, href: "/account-invitations" },
+    { label: "Roles", value: roles.length, href: "/roles" },
   ];
-
-  async function workAt(campus: OrgCampus) {
-    try {
-      await switchCampus(campus.id);
-      toast({ title: "Working campus changed", description: campus.name });
-    } catch (error) {
-      toast({ title: "Could not open the campus", description: messageOf(error), tone: "error" });
-    }
-  }
 
   return (
     <div className="space-y-10">
@@ -99,116 +70,107 @@ export function PlatformAdminDashboard() {
           <h2 id="platform-heading" className="mt-1 text-xl font-semibold tracking-tight">
             Every organization and campus at a glance
           </h2>
-          <p className="mt-1 max-w-3xl text-sm text-muted-foreground">Open a campus to work inside it.</p>
+          <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
+            Totals across the whole platform. Open a campus to work inside it.
+          </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <ButtonLink href="/organizations/create" variant="outline">
             <Building2 /> Add organization
           </ButtonLink>
-          <ButtonLink href="/schools?new=1" variant="outline">
+          <ButtonLink href="/schools/create" variant="outline">
             <School /> Add campus
           </ButtonLink>
-          {manageAccess && (
-            <ButtonLink href="/admins/create">
-              <MailPlus /> Invite someone
-            </ButtonLink>
-          )}
+          <ButtonLink href="/account-invitations/create">
+            <MailPlus /> Invite someone
+          </ButtonLink>
         </div>
       </section>
 
-      {organizations.error && <Alert tone="destructive">{organizations.error.message}</Alert>}
-
       {needsSetup.length > 0 && (
-        <Alert
-          tone="warning"
-          icon={TriangleAlert}
-          title={`${needsSetup.length} ${needsSetup.length === 1 ? "campus needs" : "campuses need"} its details completed`}
-        >
-          {needsSetup.slice(0, 6).map(({ campus, organization }, index) => (
+        <Alert tone="warning" icon={TriangleAlert} title={`${needsSetup.length} ${needsSetup.length === 1 ? "campus needs" : "campuses need"} setting up`}>
+          {needsSetup.map((campus, index) => (
             <span key={campus.id}>
               {index > 0 && ", "}
-              <Link href={`/schools?org=${organization.id}`} className="font-medium text-foreground underline-offset-4 hover:underline">
+              <Link href={`/schools/${campus.id}`} className="font-medium text-foreground underline-offset-4 hover:underline">
                 {campus.name}
               </Link>
             </span>
-          ))}
-          {needsSetup.length > 6 && ` and ${needsSetup.length - 6} more`}.
+          ))}{" "}
+          cannot start daily work until its school year and terms are set.
         </Alert>
       )}
 
       <section aria-label="Platform snapshot">
-        <dl className="grid grid-cols-2 gap-x-6 gap-y-5 sm:grid-cols-3 xl:grid-cols-5">
+        <dl className="grid grid-cols-2 gap-x-6 gap-y-5 sm:grid-cols-4 xl:grid-cols-7">
           {snapshot.map((stat) => (
             <Link key={stat.label} href={stat.href} className="group flex min-h-11 select-none flex-col-reverse justify-end">
               <dt className="truncate text-sm text-muted-foreground group-hover:text-foreground">{stat.label}</dt>
-              <dd className="text-2xl font-semibold tabular-nums">
-                {stat.value ?? <span className="inline-block h-7 w-12 animate-pulse rounded bg-muted align-middle" aria-label="Loading" />}
-              </dd>
+              <dd className="text-2xl font-semibold tabular-nums">{formatNumber(stat.value)}</dd>
             </Link>
           ))}
         </dl>
       </section>
 
       <section className="min-w-0" aria-labelledby="campus-health">
-        <SectionHeading title="Campuses" id="campus-health">
+        <SectionHeading title="Campus health" id="campus-health">
           <SeeAll href="/schools">All campuses</SeeAll>
         </SectionHeading>
-        {campusPages.error ? (
-          <Alert tone="destructive">{campusPages.error.message}</Alert>
-        ) : !campusesLoaded ? (
-          <p className="py-4 text-sm text-muted-foreground">Loading campuses…</p>
-        ) : campuses.length === 0 ? (
-          <p className="py-4 text-sm text-muted-foreground">No campuses yet. Add one to an organization.</p>
-        ) : (
-          <div className="beautify-scrollbar relative max-w-full overflow-x-auto">
-            <table className="w-full min-w-[40rem] text-sm">
-              <caption className="sr-only">Every campus, its organization and whether its details are complete</caption>
-              <thead>
-                <tr className="border-b text-left text-muted-foreground">
-                  <th scope="col" className="py-3 pr-4 font-medium">Campus</th>
-                  <th scope="col" className="px-4 py-3 font-medium">Location</th>
-                  <th scope="col" className="px-4 py-3 font-medium">Time zone</th>
-                  <th scope="col" className="px-4 py-3 font-medium">Details</th>
-                  <th scope="col" className="py-3 pl-4"><span className="sr-only">Open</span></th>
-                </tr>
-              </thead>
-              <tbody>
-                {campuses.map(({ campus, organization }) => {
-                  const mine = myCampuses.some((item) => item.id === campus.id);
-                  return (
-                    <tr key={campus.id} className="border-b last:border-0 hover:bg-muted/40">
-                      <td className="py-3 pr-4">
-                        <span className="block font-medium">{campus.name}</span>
-                        <span className="block text-xs text-muted-foreground">
-                          {organization.name} · <span className="font-mono">{campus.code}</span>
+        {/* `relative` keeps the table's screen-reader-only text inside the scroll box. */}
+        <div className="beautify-scrollbar relative max-w-full overflow-x-auto">
+          <table className="w-full min-w-[44rem] text-sm">
+            <caption className="sr-only">Students, teachers and readiness of each campus</caption>
+            <thead>
+              <tr className="border-b text-left text-muted-foreground">
+                <th scope="col" className="py-3 pr-4 font-medium">Campus</th>
+                <th scope="col" className="w-[30%] px-4 py-3 font-medium">Students</th>
+                <th scope="col" className="px-4 py-3 text-right font-medium">Teachers</th>
+                <th scope="col" className="px-4 py-3 text-right font-medium">Students per teacher</th>
+                <th scope="col" className="px-4 py-3 font-medium">Status</th>
+                <th scope="col" className="py-3 pl-4"><span className="sr-only">Open</span></th>
+              </tr>
+            </thead>
+            <tbody>
+              {campuses.map((campus) => {
+                const students = num(campus.students);
+                const teachers = num(campus.teachers);
+                const ready = campus.status === "Active";
+                return (
+                  <tr key={campus.id} className="border-b last:border-0 hover:bg-muted/40">
+                    <td className="py-3 pr-4">
+                      <span className="block font-medium">{campus.name}</span>
+                      <span className="block text-xs text-muted-foreground">
+                        {campus.organization} · {campus.city}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3">
+                      <span className="grid grid-cols-[minmax(0,1fr)_3.5rem] items-center gap-3">
+                        <span className="relative h-2 overflow-hidden rounded-full bg-muted" aria-hidden>
+                          <span
+                            className="absolute inset-y-0 left-0 rounded-full"
+                            style={{ width: `${(students / largestCampus) * 100}%`, backgroundColor: "hsl(var(--chart-2))" }}
+                          />
                         </span>
-                      </td>
-                      <td className="px-4 py-3">{[campus.city, campus.country].filter(Boolean).join(", ") || "—"}</td>
-                      <td className="px-4 py-3 whitespace-nowrap">{timeZoneLabel(campus.timezone)}</td>
-                      <td className="px-4 py-3">
-                        {campus.setupDetailsCompletedAt ? <Badge tone="success">Complete</Badge> : <Badge tone="warning">Setup needed</Badge>}
-                      </td>
-                      <td className="py-2 pl-4 text-right">
-                        {campus.id === schoolId ? (
-                          <span className="text-xs text-muted-foreground">Working here</span>
-                        ) : mine ? (
-                          <Button variant="ghost" size="sm" onClick={() => void workAt(campus)}>
-                            Work here <span aria-hidden>→</span>
-                            <span className="sr-only">{campus.name}</span>
-                          </Button>
-                        ) : (
-                          <Link href={`/schools?org=${organization.id}`} className="text-sm font-medium underline-offset-4 hover:underline">
-                            View
-                          </Link>
-                        )}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
+                        <span className="text-right tabular-nums">{formatNumber(students)}</span>
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 text-right tabular-nums">{formatNumber(teachers)}</td>
+                    <td className="px-4 py-3 text-right tabular-nums">{teachers ? Math.round(students / teachers) : "—"}</td>
+                    <td className="px-4 py-3">
+                      <Badge tone={ready ? "success" : "warning"}>{ready ? "Ready" : "Setup needed"}</Badge>
+                    </td>
+                    <td className="py-3 pl-4 text-right">
+                      <Link href={`/schools/${campus.id}`} className="inline-flex min-h-10 items-center gap-1 whitespace-nowrap font-medium underline-offset-4 hover:underline">
+                        Open campus <span aria-hidden>→</span>
+                        <span className="sr-only">{campus.name}</span>
+                      </Link>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
       </section>
 
       <div className="grid gap-10 lg:grid-cols-2">
@@ -216,65 +178,56 @@ export function PlatformAdminDashboard() {
           <SectionHeading title="Organizations" id="organizations-overview">
             <SeeAll href="/organizations">All organizations</SeeAll>
           </SectionHeading>
-          {orgList.length === 0 ? (
-            <p className="py-4 text-sm text-muted-foreground">{organizations.data ? "No organizations yet." : "Loading…"}</p>
+          <ul className="divide-y">
+            {organizationSummaries.map((organization) => (
+              <li key={organization.id}>
+                <Link href={`/organizations/${organization.id}`} className="flex min-h-14 items-center justify-between gap-4 py-2 hover:bg-muted/40">
+                  <span className="min-w-0">
+                    <span className="block truncate text-sm font-medium">{organization.name}</span>
+                    <span className="block font-mono text-xs text-muted-foreground">{organization.code}</span>
+                  </span>
+                  <span className="shrink-0 text-right text-xs tabular-nums text-muted-foreground">
+                    <span className="block">
+                      {organization.campusCount} {organization.campusCount === 1 ? "campus" : "campuses"}
+                    </span>
+                    <span className="block">{formatNumber(organization.students)} students</span>
+                  </span>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </section>
+
+        <section className="min-w-0" aria-labelledby="invitations-overview">
+          <SectionHeading title="Waiting on an invitation" id="invitations-overview">
+            <SeeAll href="/account-invitations">All invitations</SeeAll>
+          </SectionHeading>
+          {pendingInvitations.length === 0 ? (
+            <p className="py-4 text-sm text-muted-foreground">Nobody is waiting to set up an account.</p>
           ) : (
             <ul className="divide-y">
-              {orgList.map((organization, index) => {
-                const count = campusPages.data?.[index]?.meta.total;
-                return (
-                  <li key={organization.id}>
-                    <Link href={`/organizations/${organization.id}`} className="flex min-h-14 items-center justify-between gap-4 py-2 hover:bg-muted/40">
-                      <span className="min-w-0">
-                        <span className="block truncate text-sm font-medium">{organization.name}</span>
-                        <span className="block font-mono text-xs text-muted-foreground">{organization.code}</span>
+              {pendingInvitations.slice(0, 5).map((invitation) => (
+                <li key={invitation.id}>
+                  <Link href={`/account-invitations/${invitation.id}`} className="flex min-h-14 items-center justify-between gap-4 py-2 hover:bg-muted/40">
+                    <span className="min-w-0">
+                      <span className="block truncate text-sm font-medium">{invitation.name}</span>
+                      <span className="block truncate text-xs text-muted-foreground">
+                        {invitation.role} · {invitation.email}
                       </span>
-                      <span className="shrink-0 text-right text-xs tabular-nums text-muted-foreground">
-                        {count === undefined ? "…" : `${count} ${count === 1 ? "campus" : "campuses"}`}
-                      </span>
-                    </Link>
-                  </li>
-                );
-              })}
+                    </span>
+                    <span className="shrink-0 text-xs tabular-nums text-muted-foreground">Expires {formatDate(String(invitation.expires))}</span>
+                  </Link>
+                </li>
+              ))}
             </ul>
           )}
         </section>
-
-        {manageAccess && (
-          <section className="min-w-0" aria-labelledby="invitations-overview">
-            <SectionHeading title="Waiting on an invitation" id="invitations-overview">
-              <SeeAll href="/account-invitations">All invitations</SeeAll>
-            </SectionHeading>
-            {!pending.data ? (
-              <p className="py-4 text-sm text-muted-foreground">{pending.error ? pending.error.message : "Loading…"}</p>
-            ) : pending.data.data.length === 0 ? (
-              <p className="py-4 text-sm text-muted-foreground">Nobody at this campus is waiting to set up an account.</p>
-            ) : (
-              <ul className="divide-y">
-                {pending.data.data.map((invitation) => (
-                  <li key={invitation.id}>
-                    <Link href={`/admins/${invitation.user.id}`} className="flex min-h-14 items-center justify-between gap-4 py-2 hover:bg-muted/40">
-                      <span className="min-w-0">
-                        <span className="block truncate text-sm font-medium">{invitation.user.name}</span>
-                        <span className="block truncate text-xs text-muted-foreground">{invitation.user.email}</span>
-                      </span>
-                      <span className="shrink-0 text-xs tabular-nums text-muted-foreground">Expires {formatDate(invitation.expiresAt)}</span>
-                    </Link>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </section>
-        )}
       </div>
 
       <div className="grid gap-10 lg:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)]">
         <section className="min-w-0" aria-labelledby="activity-overview">
           <SectionHeading title="Recent activity" id="activity-overview">
-            <span className="flex items-center gap-2">
-              <SampleBadge />
-              <SeeAll href="/activity-logs">Activity logs</SeeAll>
-            </span>
+            <SeeAll href="/activity-logs">{problems > 0 ? `Activity logs · ${problems} to review` : "Activity logs"}</SeeAll>
           </SectionHeading>
           <ul className="divide-y">
             {recentActivity.map((entry, index) => (
@@ -293,38 +246,25 @@ export function PlatformAdminDashboard() {
           </ul>
         </section>
 
-        {manageAccess && (
-          <section className="min-w-0" aria-labelledby="admins-overview">
-            <SectionHeading title="Administrators at this campus" id="admins-overview">
-              <SeeAll href="/admins">Manage</SeeAll>
-            </SectionHeading>
-            {!accounts.data ? (
-              <p className="py-4 text-sm text-muted-foreground">{accounts.error ? accounts.error.message : "Loading…"}</p>
-            ) : admins.length === 0 ? (
-              <p className="py-4 text-sm text-muted-foreground">Nobody here holds an administrator role.</p>
-            ) : (
-              <ul className="divide-y">
-                {admins.slice(0, 8).map((admin) => (
-                  <li key={admin.id}>
-                    <Link href={`/admins/${admin.id}`} className="flex min-h-14 items-center gap-3 py-2 hover:bg-muted/40">
-                      <Avatar name={admin.name} size="sm" />
-                      <span className="min-w-0 flex-1">
-                        <span className="block truncate text-sm font-medium">{admin.name}</span>
-                        <span className="block truncate text-xs text-muted-foreground">
-                          {admin.roles
-                            .filter((role) => ADMIN_ROLES.has(role.name))
-                            .map((role) => role.name)
-                            .join(", ")}
-                        </span>
-                      </span>
-                      <span className="shrink-0 text-xs tabular-nums text-muted-foreground">Joined {formatDate(admin.membership.joinedAt)}</span>
-                    </Link>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </section>
-        )}
+        <section className="min-w-0" aria-labelledby="admins-overview">
+          <SectionHeading title="Administrators" id="admins-overview">
+            <SeeAll href="/admins">Manage</SeeAll>
+          </SectionHeading>
+          <ul className="divide-y">
+            {admins.map((admin) => (
+              <li key={admin.id}>
+                <Link href={`/admins/${admin.id}`} className="flex min-h-14 items-center gap-3 py-2 hover:bg-muted/40">
+                  <Avatar name={String(admin.name)} size="sm" />
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-sm font-medium">{admin.name}</span>
+                    <span className="block truncate text-xs text-muted-foreground">{admin.role}</span>
+                  </span>
+                  <span className="shrink-0 text-xs tabular-nums text-muted-foreground">Seen {formatDate(String(admin.lastSeen))}</span>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </section>
       </div>
 
       <section className="min-w-0 space-y-4" aria-labelledby="system-health">

@@ -17,6 +17,7 @@ import { CycleSections } from '../curriculum/cycle-sections.service.js';
 import { AcademicCycleSection } from '../curriculum/entities/academic-cycle-section.entity.js';
 import { AcademicLevel } from '../curriculum/entities/academic-level.entity.js';
 import { holdsRoleHere } from '../enrollments/learners.js';
+import { GuardianLinks } from '../enrollments/guardian-links.service.js';
 import { Students } from '../enrollments/students.service.js';
 import { SessionService } from '../identity/auth/session.service.js';
 import { CliError } from '../identity/cli/create-platform-admin.js';
@@ -46,7 +47,7 @@ export const DEMO_TIME_ZONE = 'Asia/Karachi';
 export const DEMO_LEVEL = 'Class 1';
 export const DEMO_SECTION = 'A';
 
-type DemoAccess = 'platform' | 'organization' | 'campus' | 'student';
+type DemoAccess = 'platform' | 'organization' | 'campus' | 'student' | 'parent';
 
 export const DEMO_ACCOUNTS: ReadonlyArray<{
   email: string;
@@ -89,6 +90,8 @@ export const DEMO_ACCOUNTS: ReadonlyArray<{
     role: 'librarian',
   },
   { email: 'student@gmail.com', name: 'Student', access: 'student' },
+  // Linked to the demo student as their guardian.
+  { email: 'parent@gmail.com', name: 'Parent', access: 'parent' },
 ];
 
 // The sign-in rule for new passwords (NewPasswordDto).
@@ -121,9 +124,15 @@ export async function seedDemoUsers(
 export async function seedDemoUsersWithHash(
   app: INestApplicationContext,
   passwordHash: string,
+  options: { only?: readonly string[] } = {},
 ): Promise<SeededDemo> {
+  // Only these accounts are made or put back; the live start-up names the
+  // ones that have never existed.
+  const chosen = DEMO_ACCOUNTS.filter(
+    (account) => !options.only || options.only.includes(account.email),
+  );
   return asCliError(async () => {
-    await refuseOtherAccounts(app);
+    await refuseOtherAccounts(app, chosen);
     const school = await demoCampus(app);
     const accounts = await app.get(TransactionService).run(async (tx) => {
       const manager = tx.manager;
@@ -132,7 +141,7 @@ export async function seedDemoUsersWithHash(
         `SELECT pg_advisory_xact_lock(hashtext('sps-erp:demo-users'))`,
       );
       const seeded: Array<{ user: User; created: boolean }> = [];
-      for (const account of DEMO_ACCOUNTS) {
+      for (const account of chosen) {
         const result = await signInOnly(app, manager, account, passwordHash);
         await giveAccess(app, manager, school, result.user, account);
         seeded.push(result);
@@ -146,6 +155,13 @@ export async function seedDemoUsersWithHash(
       ),
     );
     if (student) await admitStudent(app, school, student.user);
+    const parent = accounts.find(({ user }) =>
+      DEMO_ACCOUNTS.some(
+        (account) =>
+          account.access === 'parent' && account.email === user.email,
+      ),
+    );
+    if (parent) await linkToDemoStudent(app, school, parent.user);
     return {
       organizationId: school.organizationId,
       schoolId: school.id,
@@ -196,11 +212,12 @@ export async function removeDemoUsers(
 // never taken over.
 async function refuseOtherAccounts(
   app: INestApplicationContext,
+  accounts: typeof DEMO_ACCOUNTS,
 ): Promise<void> {
   const taken = (await app.get(DataSource).query(
     `SELECT email FROM users WHERE NOT demo_account AND email = ANY($1::text[])
       ORDER BY email`,
-    [DEMO_ACCOUNTS.map((account) => account.email)],
+    [accounts.map((account) => account.email)],
   )) as Array<{ email: string }>;
   if (taken.length) {
     throw new CliError(
@@ -335,6 +352,15 @@ async function giveAccess(
         actorId: null,
       });
       return;
+    case 'parent':
+      await memberships.grant(manager, user.id, school.id);
+      await roles.giveFamilyRole(manager, {
+        userId: user.id,
+        roleName: BuiltInRole.Parent,
+        schoolId: school.id,
+      });
+      await app.get(GuardianLinks).parentRecordIn(manager, user.id);
+      return;
     case 'student':
       // The admission below gives the student role; the membership comes
       // first so the campus knows the account.
@@ -354,6 +380,26 @@ async function campusRole(
   const shared = await authority.sharedRole(manager, name);
   if (!shared) throw new Error(`The ${name} role is missing.`);
   return (await authority.tailoredCopyOf(manager, shared, schoolId)) ?? shared;
+}
+
+// The demo parent looks after the demo student, once the student has an
+// enrollment at the campus.
+async function linkToDemoStudent(
+  app: INestApplicationContext,
+  school: School,
+  parent: User,
+): Promise<void> {
+  const studentEmail = DEMO_ACCOUNTS.find(
+    (account) => account.access === 'student',
+  )!.email;
+  const [enrollment] = (await app.get(DataSource).query(
+    `SELECT sr.id FROM student_records sr JOIN users u ON u.id = sr.user_id
+      WHERE u.email = $1 AND sr.school_id = $2
+      ORDER BY sr.created_at DESC LIMIT 1`,
+    [studentEmail, school.id],
+  )) as Array<{ id: string }>;
+  if (!enrollment) return;
+  await app.get(GuardianLinks).link(null, school.id, parent.id, enrollment.id);
 }
 
 // A real admission through the admission service, into section A of

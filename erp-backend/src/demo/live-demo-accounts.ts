@@ -1,6 +1,6 @@
 import type { INestApplicationContext, LoggerService } from '@nestjs/common';
 import { DataSource } from 'typeorm';
-import { seedDemoUsersWithHash } from './seed-demo-users.js';
+import { DEMO_ACCOUNTS, seedDemoUsersWithHash } from './seed-demo-users.js';
 
 // The live backend's Railway domain. Only there are the demo accounts made
 // on start-up (the owner's choice), so the team can sign in to the live
@@ -14,22 +14,26 @@ export const LIVE_DEMO_PASSWORD_HASH =
 
 export type LiveDemoOutcome = 'not-live' | 'already-made' | 'made';
 
-// Makes the demo accounts on the live backend, once: nothing happens when
-// any demo account has ever existed (archived ones count), so accounts
-// removed with `seed-demo-users --remove` stay removed.
+// Makes, on the live backend, each demo account whose email has never
+// existed. An account removed with `seed-demo-users --remove` still exists
+// (archived), so it stays removed; a demo account added later (the parent)
+// is made on the next start.
 export async function makeLiveDemoAccountsOnce(
   app: INestApplicationContext,
   railwayDomain: string | undefined,
   passwordHash = LIVE_DEMO_PASSWORD_HASH,
 ): Promise<LiveDemoOutcome> {
   if (railwayDomain?.trim() !== LIVE_RAILWAY_DOMAIN) return 'not-live';
-  const [row] = (await app
+  const emails = DEMO_ACCOUNTS.map((account) => account.email);
+  const existing = (await app
     .get(DataSource)
-    .query(
-      'SELECT EXISTS (SELECT 1 FROM users WHERE demo_account) AS made',
-    )) as [{ made: boolean }];
-  if (row.made) return 'already-made';
-  await seedDemoUsersWithHash(app, passwordHash);
+    .query('SELECT email FROM users WHERE email = ANY($1::text[])', [
+      emails,
+    ])) as Array<{ email: string }>;
+  const known = new Set(existing.map((row) => row.email));
+  const missing = emails.filter((email) => !known.has(email));
+  if (!missing.length) return 'already-made';
+  await seedDemoUsersWithHash(app, passwordHash, { only: missing });
   return 'made';
 }
 

@@ -10,6 +10,9 @@ import { ThrottlerModule } from '@nestjs/throttler';
 import { LoggerModule } from 'nestjs-pino';
 import { AcademicPeriodGuard } from './academic/academic-period.guard.js';
 import { AcademicModule } from './academic/academic.module.js';
+import { CohortsModule } from './cohorts/cohorts.module.js';
+import { CalendarModule } from './calendar/calendar.module.js';
+import { NoticesModule } from './notices/notices.module.js';
 import { CurriculumModule } from './curriculum/curriculum.module.js';
 import { EnrollmentsModule } from './enrollments/enrollments.module.js';
 import { GraduatedGuard } from './enrollments/graduated.guard.js';
@@ -36,9 +39,11 @@ import { AuthGuard, PasswordChangeGuard } from './identity/auth/auth.guard.js';
 import { IdentityModule } from './identity/identity.module.js';
 import { MailModule } from './mail/mail.module.js';
 import { OrganizationsModule } from './organizations/organizations.module.js';
+import { PeopleModule } from './people/people.module.js';
 import { QueueModule } from './queue/queue.module.js';
 import { RedisModule } from './redis/redis.module.js';
 import { SchedulerModule } from './scheduler/scheduler.module.js';
+import { StaffModule } from './staff/staff.module.js';
 import { StorageModule } from './storage/storage.module.js';
 
 @Module({
@@ -74,6 +79,11 @@ import { StorageModule } from './storage/storage.module.js';
     AcademicModule,
     CurriculumModule,
     EnrollmentsModule,
+    PeopleModule,
+    StaffModule,
+    CohortsModule,
+    CalendarModule,
+    NoticesModule,
     SchedulerModule,
   ],
   controllers: [AppController],

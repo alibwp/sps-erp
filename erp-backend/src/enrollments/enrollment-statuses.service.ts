@@ -17,6 +17,7 @@ import {
 import { EnrollmentStatusChange } from './entities/enrollment-status-change.entity.js';
 import { StudentRecord } from './entities/student-record.entity.js';
 import { openEnrollmentElsewhere, shortDay, worksAsStaff } from './learners.js';
+import { WaitlistWithdrawals } from './waitlist-withdrawals.service.js';
 
 export const StatusMessages = {
   cannotMove: (from: EnrollmentStatus, to: EnrollmentStatus) =>
@@ -69,6 +70,7 @@ export class EnrollmentStatuses {
     private readonly placements: EnrollmentPlacements,
     private readonly sections: CycleSections,
     private readonly audit: AuditService,
+    private readonly waitlist: WaitlistWithdrawals,
   ) {}
 
   registerCloseHandler(handler: EnrollmentCloseHandler): void {
@@ -129,6 +131,14 @@ export class EnrollmentStatuses {
         reason,
         effectiveOn: input.effectiveOn,
       });
+    }
+    // A learner taken back no longer waits for a seat here.
+    if (isClosedEnrollment(current)) {
+      await this.waitlist.withdrawForEnrolledIn(
+        manager,
+        enrollment,
+        input.actorId,
+      );
     }
     if (isClosedEnrollment(status)) {
       for (const handler of this.closeHandlers) {

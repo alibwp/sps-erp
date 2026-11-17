@@ -79,7 +79,6 @@ import {
   Wallet,
   type LucideIcon,
 } from "lucide-react";
-import { pageChangeable, pageOpenable, type Access } from "@/lib/access";
 import { hasPortal, NOTIFICATION_SETTINGS, PORTAL_AREAS, PORTAL_HOME } from "@/lib/portal";
 import type { RoleId } from "@/lib/roles";
 
@@ -123,7 +122,7 @@ export const navigation: NavGroup[] = [
       { label: "Promotions", href: "/promotions", icon: CircleArrowUp },
       { label: "Graduations", href: "/graduations", icon: Award },
       { label: "Programmes", href: "/programs", icon: Sparkles },
-      { label: "Accounts", href: "/admins", icon: ShieldCheck },
+      { label: "Administrators", href: "/admins", icon: ShieldCheck },
       { label: "Account invitations", href: "/account-invitations", icon: Mail },
     ],
   },
@@ -448,66 +447,42 @@ function hiddenPages(role: RoleId): string[] {
   return HIDDEN_PAGES[role] ?? [];
 }
 
-// Pages connected to the backend follow the permissions held at the working
-// campus (lib/access.ts); the others keep the role-based rules above until
-// they have a backend. Without `access` (session not ready) only the role
-// rules apply. Students and parents stay inside what their role shows even
-// when a permission would open a staff page, as in the reference.
-
-/** Whether the role rules alone let this role change the records under `pathname`. */
-function roleCanChange(role: RoleId, pathname: string): boolean {
+/** Whether this role may add, edit or delete the records under `pathname`. */
+export function canChange(role: RoleId, pathname: string): boolean {
   return !(READ_ONLY[role] ?? []).some((href) => isActive(pathname, href));
 }
 
-/** Whether the role rules alone let this role open `pathname`. */
-function roleCanOpen(role: RoleId, pathname: string): boolean {
-  if (/\/(create|edit)$/.test(pathname) && !roleCanChange(role, pathname)) return false;
+/** Whether this role may open the page at `pathname`. */
+export function canOpen(role: RoleId, pathname: string): boolean {
+  // The portal belongs to the people it describes: students and parents.
+  if (isActive(pathname, PORTAL_HOME)) return hasPortal(role);
+  if (/\/(create|edit)$/.test(pathname) && !canChange(role, pathname)) return false;
   const openable = STILL_OPENABLE[role] ?? [];
   return !hiddenPages(role).some((href) => !openable.includes(href) && isActive(pathname, href));
 }
 
-/** Whether this person may add, edit or delete the records under `pathname`. */
-export function canChange(role: RoleId, pathname: string, access?: Access): boolean {
-  const live = access ? pageChangeable(access, pathname) : undefined;
-  if (live === undefined) return roleCanChange(role, pathname);
-  return hasPortal(role) ? live && roleCanChange(role, pathname) : live;
-}
-
-/** Whether this person may open the page at `pathname`. */
-export function canOpen(role: RoleId, pathname: string, access?: Access): boolean {
-  // The portal belongs to the people it describes: students and parents.
-  if (isActive(pathname, PORTAL_HOME)) return hasPortal(role);
-  const live = access ? pageOpenable(access, pathname) : undefined;
-  if (live === undefined) return roleCanOpen(role, pathname);
-  return hasPortal(role) ? live && roleCanOpen(role, pathname) : live;
-}
-
-/** The sidebar for one person: "My school" for portal roles, then the staff pages they may open. */
-export function navigationFor(role: RoleId, access?: Access): NavGroup[] {
-  const staff = staffNavigationFor(role, access);
+/** The sidebar for one role: "My school" for portal roles, then the staff pages it may see. */
+export function navigationFor(role: RoleId): NavGroup[] {
+  const staff = staffNavigationFor(role);
   if (!hasPortal(role)) return staff;
   // As in the reference, "My school" follows Dashboard.
   return [staff[0], portalGroup, ...staff.slice(1)];
 }
 
-/** The staff sidebar: pages the person cannot open removed, then empty menus and groups. */
-function staffNavigationFor(role: RoleId, access?: Access): NavGroup[] {
+/** The staff sidebar for one role: hidden pages removed, then empty menus and groups. */
+function staffNavigationFor(role: RoleId): NavGroup[] {
   const own = ROLE_NAVIGATION[role];
+  if (own) return own;
   const hidden = new Set(hiddenPages(role));
-  const shows = (href: string) => {
-    const live = access ? pageOpenable(access, href) : undefined;
-    // A role with a sidebar of its own keeps it; connected pages in it still need the permission.
-    if (live === undefined) return own ? true : !hidden.has(href);
-    return hasPortal(role) ? live && !hidden.has(href) : live;
-  };
+  if (hidden.size === 0) return navigation;
 
-  return (own ?? navigation)
+  return navigation
     .map((group) => ({
       ...group,
       items: group.items
         .map((item): NavItem | null => {
-          if (!("children" in item)) return shows(item.href) ? item : null;
-          const children = item.children.filter((child) => shows(child.href));
+          if (!("children" in item)) return hidden.has(item.href) ? null : item;
+          const children = item.children.filter((child) => !hidden.has(child.href));
           return children.length > 0 ? { ...item, children } : null;
         })
         .filter((item): item is NavItem => item !== null),
@@ -517,9 +492,9 @@ function staffNavigationFor(role: RoleId, access?: Access): NavGroup[] {
 
 export type CommandItem = { label: string; href: string; group: string };
 
-/** Every page link one person can open, with its group, for the command palette. */
-export function commandItemsFor(role: RoleId, access?: Access): CommandItem[] {
-  return navigationFor(role, access).flatMap((group) =>
+/** Every page link one role can open, with its group, for the command palette. */
+export function commandItemsFor(role: RoleId): CommandItem[] {
+  return navigationFor(role).flatMap((group) =>
     group.items.flatMap((item): CommandItem[] =>
       "children" in item
         ? item.children.map((child) => ({ label: child.label, href: child.href, group: `${group.label} · ${item.label}` }))

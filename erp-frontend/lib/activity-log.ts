@@ -13,7 +13,7 @@ const ACTIONS: { level: LogLevel; message: string }[] = [
   { level: "Info", message: "Azeem Abbasi signed in" },
   { level: "Info", message: "Adil Mehmood updated student Ayesha Khan" },
   { level: "Info", message: "Kamran Butt recorded a payment of Rs 21,000 on INV-2026-1204" },
-  { level: "Warning", message: "Five failed sign-in attempts for teacher@spsschool.edu.pk" },
+  { level: "Warning", message: "Five failed sign-in attempts for teacher@spsarmyschool.edu.pk" },
   { level: "Info", message: "Sadia Raza published the notice “Winter uniform from 15 November”" },
   { level: "Error", message: "Email delivery failed for 2 invitation messages" },
   { level: "Info", message: "Timetable Class 6 A published" },

@@ -18,7 +18,7 @@ export const metadata: Metadata = {
     default: "SPS ERP",
     template: "%s | SPS ERP",
   },
-  description: "SPS ERP — school management for SPS School.",
+  description: "SPS ERP — school management for SPS Army School.",
   robots: { index: false, follow: false },
 };
 
@@ -29,11 +29,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       <head>
         <script dangerouslySetInnerHTML={{ __html: themeScript }} />
       </head>
-      {/* Browser extensions (password managers, antivirus) add attributes to
-          <body> before React starts; don't report those as mismatches. */}
-      <body className="min-h-screen bg-background font-sans text-foreground" suppressHydrationWarning>
-        {children}
-      </body>
+      <body className="min-h-screen bg-background font-sans text-foreground">{children}</body>
     </html>
   );
 }

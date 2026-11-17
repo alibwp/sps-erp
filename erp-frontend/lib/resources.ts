@@ -6,11 +6,15 @@ import {
   CLASSES,
   DEMO_TODAY,
   PARENT_NAMES,
+  SCHOOL,
   SECTIONS,
   STAFF_NAMES,
   STUDENT_NAMES,
   SUBJECTS,
+  SUBJECT_CODES,
   TEACHER_NAMES,
+  emailFor,
+  genderOf,
   rows,
   shiftDate,
 } from "@/lib/mock";
@@ -50,51 +54,7 @@ export type Field = {
 export type FieldGroup = { title: string; description?: string; fields: Field[] };
 
 /** Screens whose record page needs more than the generic detail layout. */
-export type DetailView = "timetable" | "invoice" | "marksheet" | "report-card" | "person";
-
-/** What a create or edit form sent: text as strings, checkboxes as booleans. */
-export type FormValues = Record<string, string | boolean | File | null>;
-
-/**
- * How a screen reads and writes its records on the backend. A screen with
- * `api` shows live data; one without it keeps its demo `rows`.
- *
- * The mappers take the backend's own record type, e.g.
- * `toRow: (subject: SubjectDto) => ({ id: subject.id, name: subject.name })`.
- */
-export type ResourceApi = {
-  /** List endpoint, also the create (POST) target: "/v1/subjects". */
-  path: string;
-  /**
-   * True when the list answers { data, meta } and takes page, perPage,
-   * search and sort; false when it answers a plain array (searched, sorted
-   * and paged here). The backend rejects query parameters it does not know.
-   */
-  paged: boolean;
-  /** One record's endpoint; defaults to `${path}/${id}`. */
-  item?: (id: string) => string;
-  /** Fixed query parameters for every list call (e.g. a role filter). */
-  query?: Record<string, string>;
-  /** Backend record → the row the table and record page show. */
-  toRow: (record: never) => Row;
-  /** Backend record → the edit form's starting values; defaults to toRow. */
-  toForm?: (record: never) => Record<string, CellValue>;
-  /** Form values → request body. Without it the form is not connected. */
-  toBody?: (values: FormValues, mode: "create" | "edit") => unknown;
-  /** How an edit is sent; most endpoints take PATCH. */
-  update?: "PATCH" | "PUT";
-  /** The backend accepts DELETE on the record. */
-  remove?: boolean;
-  /** Column key → backend sort field. Only these columns can be sorted. */
-  sort?: Record<string, string>;
-  /** Backend field name → form field name, for validation messages. */
-  fields?: Record<string, string>;
-};
-
-/** The endpoint of one record of a live screen. */
-export function itemPath(api: ResourceApi, id: string): string {
-  return api.item ? api.item(id) : `${api.path}/${encodeURIComponent(id)}`;
-}
+export type DetailView = "timetable" | "invoice" | "marksheet" | "report-card" | "permissions" | "person";
 
 export type Resource = {
   slug: string;
@@ -109,16 +69,10 @@ export type Resource = {
   createLabel?: string;
   submitLabel?: string;
   view?: DetailView;
-  /**
-   * Lists shown under a record. Demo lists keep the rows where `matchKey`
-   * equals the record title; a live list is asked for the records whose
-   * `param` query parameter is the record's id (and is left out without one).
-   */
-  related?: { slug: string; matchKey: string; title?: string; param?: string }[];
+  /** Lists shown under a record, filtered where `matchKey` equals the record title. */
+  related?: { slug: string; matchKey: string; title?: string }[];
   /** Headline figures shown above the list, worked out from `rows`. */
   stats?: { label: string; value: string }[];
-  /** Set when the screen reads its records from the backend. */
-  api?: ResourceApi;
 };
 
 // ---------------------------------------------------------------------------
@@ -156,10 +110,289 @@ const pickName = (names: string[], index: number) => names[index % names.length]
 
 const list: Resource[] = [
   // ----- Organization ------------------------------------------------------
+  {
+    slug: "organizations",
+    title: "Organizations",
+    singular: "Organization",
+    description: "An organization groups the campuses that share policies, calendars and billing.",
+    titleKey: "name",
+    columns: [
+      { key: "name", label: "Name" },
+      { key: "code", label: "Code", kind: "mono" },
+      { key: "schools", label: "Campuses", kind: "number" },
+      { key: "students", label: "Students", kind: "number" },
+      { key: "email", label: "Email" },
+      { key: "status", label: "Status", kind: "badge" },
+    ],
+    rows: rows(101, 3, (i, r) => ({
+      name: ["SPS Education System", "SPS Girls Wing", "SPS Cantonment Schools"][i],
+      code: ["SPS", "SPSG", "SPSC"][i],
+      schools: [4, 2, 3][i],
+      students: r.int(800, 3200),
+      email: ["office@sps.edu.pk", "girls@sps.edu.pk", "cantt@sps.edu.pk"][i],
+      status: "Active",
+    })),
+    form: [
+      {
+        title: "Organization",
+        fields: [
+          { name: "name", label: "Name", required: true, placeholder: "SPS Education System" },
+          { name: "code", label: "Short code", placeholder: "SPS" },
+          { name: "email", label: "Email", type: "email" },
+          { name: "phone", label: "Phone", type: "tel" },
+          { name: "address", label: "Head office address", wide: true },
+        ],
+      },
+    ],
+    createLabel: "Add organization",
+    related: [{ slug: "schools", matchKey: "organization" }],
+  },
+  {
+    slug: "schools",
+    title: "Schools",
+    singular: "School",
+    description: "Each campus keeps its own students, staff and timetable.",
+    titleKey: "name",
+    columns: [
+      { key: "name", label: "Name", kind: "person", sub: "city" },
+      { key: "code", label: "Code", kind: "mono" },
+      { key: "organization", label: "Organization" },
+      { key: "students", label: "Students", kind: "number" },
+      { key: "teachers", label: "Teachers", kind: "number" },
+      { key: "status", label: "Status", kind: "badge" },
+      { key: "city", label: "City", detailOnly: true },
+      { key: "email", label: "Email", detailOnly: true },
+      { key: "phone", label: "Phone", detailOnly: true },
+    ],
+    rows: rows(102, 6, (i, r) => ({
+      name: ["SPS Army School — Main Campus", "SPS Army School — Westridge", "SPS Girls Campus", "SPS Junior School", "SPS Cantt Campus", "SPS Chaklala Campus"][i],
+      code: ["SPS-MC", "SPS-WR", "SPS-GC", "SPS-JS", "SPS-CC", "SPS-CK"][i],
+      organization: ["SPS Education System", "SPS Education System", "SPS Girls Wing", "SPS Education System", "SPS Cantonment Schools", "SPS Cantonment Schools"][i],
+      city: ["Rawalpindi", "Rawalpindi", "Islamabad", "Rawalpindi", "Lahore", "Rawalpindi"][i],
+      students: r.int(320, 1400),
+      teachers: r.int(18, 70),
+      email: `campus${i + 1}@sps.edu.pk`,
+      phone: `+92 51 555 01${40 + i}`,
+      status: i === 5 ? "Setting up" : "Active",
+    })),
+    form: [
+      {
+        title: "School details",
+        fields: [
+          { name: "name", label: "School name", required: true },
+          { name: "code", label: "Code", placeholder: "SPS-MC" },
+          { name: "organization", label: "Organization", type: "select", options: ["SPS Education System", "SPS Girls Wing", "SPS Cantonment Schools"] },
+          { name: "email", label: "Email", type: "email" },
+          { name: "phone", label: "Phone", type: "tel" },
+          { name: "logo", label: "Logo", type: "file" },
+        ],
+      },
+      {
+        title: "Address",
+        fields: [
+          { name: "address", label: "Address", wide: true },
+          { name: "city", label: "City" },
+          { name: "country", label: "Country", type: "select", options: ["Pakistan"] },
+        ],
+      },
+    ],
+    createLabel: "Add school",
+  },
+  {
+    slug: "calendar-templates",
+    title: "Calendar templates",
+    singular: "Calendar template",
+    description: "Shared term dates and holidays that campuses copy into their calendars.",
+    titleKey: "name",
+    columns: [
+      { key: "name", label: "Name" },
+      { key: "year", label: "Academic year" },
+      { key: "events", label: "Events", kind: "number" },
+      { key: "campuses", label: "Campuses using it", kind: "number" },
+      { key: "status", label: "Status", kind: "badge" },
+    ],
+    rows: rows(103, 4, (i, r) => ({
+      name: ["Federal board calendar", "Punjab board calendar", "Junior school calendar", "Winter campus calendar"][i],
+      year: YEARS[i % 2],
+      events: r.int(12, 40),
+      campuses: r.int(1, 5),
+      status: i === 3 ? "Draft" : "Published",
+    })),
+    form: [
+      {
+        title: "Template",
+        fields: [
+          { name: "name", label: "Name", required: true },
+          { name: "year", label: "Academic year", type: "select", options: YEARS },
+          { name: "description", label: "Description", type: "textarea", wide: true },
+        ],
+      },
+    ],
+    createLabel: "New template",
+  },
 
   // ----- Setup ---------------------------------------------------------------
+  {
+    slug: "academic-years",
+    title: "School years",
+    singular: "School year",
+    description: "A school year holds its terms, classes and sections.",
+    titleKey: "name",
+    columns: [
+      { key: "name", label: "Name" },
+      { key: "starts", label: "Starts", kind: "date" },
+      { key: "ends", label: "Ends", kind: "date" },
+      { key: "terms", label: "Terms", kind: "number" },
+      { key: "status", label: "Status", kind: "badge" },
+    ],
+    rows: rows(104, 3, (i) => ({
+      name: YEARS[i],
+      starts: `${2026 - i}-04-01`,
+      ends: `${2027 - i}-03-31`,
+      terms: 3,
+      status: i === 0 ? "Current" : "Closed",
+    })),
+    form: [
+      {
+        title: "School year",
+        fields: [
+          { name: "name", label: "Name", required: true, placeholder: "2027/2028" },
+          { name: "starts", label: "Starts on", type: "date", required: true },
+          { name: "ends", label: "Ends on", type: "date", required: true },
+          { name: "terms", label: "Number of terms", type: "select", options: ["2", "3", "4"] },
+        ],
+      },
+    ],
+    createLabel: "Add school year",
+    related: [{ slug: "academic-cycle-sections", matchKey: "year", title: "Sections this year" }],
+  },
+  {
+    slug: "academic-levels",
+    title: "Classes",
+    singular: "Class",
+    description: "Classes are the levels learners move through, from Nursery to Class 10.",
+    titleKey: "name",
+    columns: [
+      { key: "name", label: "Name" },
+      { key: "stage", label: "Stage" },
+      { key: "order", label: "Order", kind: "number" },
+      { key: "sections", label: "Sections", kind: "number" },
+      { key: "students", label: "Students", kind: "number" },
+    ],
+    rows: rows(105, CLASSES.length, (i, r) => ({
+      name: CLASSES[i],
+      stage: i < 2 ? "Early years" : i < 7 ? "Primary" : i < 10 ? "Middle" : "Secondary",
+      order: i + 1,
+      sections: i < 2 ? 1 : 2,
+      students: r.int(40, 90),
+    })),
+    form: [
+      {
+        title: "Class",
+        fields: [
+          { name: "name", label: "Name", required: true, placeholder: "Class 6" },
+          { name: "stage", label: "Stage", type: "select", options: ["Early years", "Primary", "Middle", "Secondary"] },
+          { name: "order", label: "Order", type: "number" },
+        ],
+      },
+    ],
+    createLabel: "Add class",
+    related: [{ slug: "academic-cycle-sections", matchKey: "level" }],
+  },
+  {
+    slug: "academic-cycle-sections",
+    title: "Sections",
+    singular: "Section",
+    description: "A section is a class group for one school year, with its own form teacher.",
+    titleKey: "name",
+    columns: [
+      { key: "name", label: "Name" },
+      { key: "level", label: "Class" },
+      { key: "year", label: "School year" },
+      { key: "teacher", label: "Form teacher" },
+      { key: "students", label: "Students", kind: "number" },
+      { key: "capacity", label: "Capacity", kind: "number" },
+      { key: "status", label: "Status", kind: "badge" },
+    ],
+    rows: rows(106, SECTIONS.length, (i, r) => ({
+      name: SECTIONS[i],
+      level: SECTIONS[i].replace(/ [A-C]$/, ""),
+      year: YEARS[0],
+      teacher: pickName(TEACHER_NAMES, i),
+      students: r.int(22, 36),
+      capacity: 40,
+      status: "Active",
+    })),
+    form: [
+      {
+        title: "Section",
+        fields: [
+          { name: "name", label: "Name", required: true, placeholder: "Class 6 A" },
+          { name: "level", label: "Class", type: "select", options: CLASSES },
+          { name: "year", label: "School year", type: "select", options: YEARS },
+          { name: "teacher", label: "Form teacher", type: "select", options: TEACHER_NAMES },
+          { name: "capacity", label: "Capacity", type: "number", placeholder: "40" },
+          { name: "room", label: "Room" },
+        ],
+      },
+    ],
+    createLabel: "Add section",
+    related: [{ slug: "students", matchKey: "section" }],
+  },
 
   // ----- People --------------------------------------------------------------
+  {
+    slug: "students",
+    title: "Students",
+    singular: "Student",
+    description: "Add the first student record for this school.",
+    titleKey: "name",
+    view: "person",
+    columns: [
+      { key: "name", label: "Name", kind: "person", sub: "email" },
+      { key: "admissionNumber", label: "Admission no.", kind: "mono" },
+      { key: "section", label: "Section" },
+      { key: "gender", label: "Gender" },
+      { key: "guardian", label: "Guardian" },
+      { key: "status", label: "Student record status", kind: "badge" },
+      { key: "email", label: "Email", detailOnly: true },
+      { key: "birthday", label: "Date of birth", kind: "date", detailOnly: true },
+      { key: "admitted", label: "Admitted on", kind: "date", detailOnly: true },
+      { key: "phone", label: "Phone", detailOnly: true },
+      { key: "city", label: "City", detailOnly: true },
+    ],
+    rows: rows(107, STUDENT_NAMES.length, (i, r) => ({
+      name: STUDENT_NAMES[i],
+      email: emailFor(STUDENT_NAMES[i], "students.sps.edu.pk"),
+      admissionNumber: `SPS/${2020 + (i % 7)}/${String(1001 + i)}`,
+      section: SECTIONS[i % SECTIONS.length],
+      gender: genderOf(STUDENT_NAMES[i]),
+      guardian: pickName(PARENT_NAMES, i),
+      status: i % 17 === 5 ? "Suspended" : i % 13 === 7 ? "Left" : "Active",
+      birthday: shiftDate("2012-01-01", r.int(0, 3200)),
+      admitted: shiftDate("2020-04-01", r.int(0, 2000)),
+      phone: r.phone(),
+      city: r.pick(["Rawalpindi", "Islamabad", "Wah Cantt"]),
+    })),
+    form: [
+      personFields,
+      {
+        title: "Admission",
+        fields: [
+          { name: "section", label: "Section", type: "select", options: SECTIONS, required: true },
+          { name: "admissionNumber", label: "Admission number", placeholder: "Made for you when left blank" },
+          { name: "admitted", label: "Date of admission", type: "date" },
+          { name: "guardian", label: "Parent / guardian", type: "select", options: PARENT_NAMES },
+        ],
+      },
+    ],
+    createLabel: "Add student",
+    submitLabel: "Admit learner",
+    related: [
+      { slug: "fee-invoices", matchKey: "student", title: "Fee invoices" },
+      { slug: "report-cards", matchKey: "student", title: "Report cards" },
+    ],
+  },
   {
     slug: "admissions-waitlist",
     title: "Admissions waitlist",
@@ -265,6 +498,74 @@ const list: Resource[] = [
       },
     ],
     createLabel: "Request move",
+  },
+  {
+    slug: "teachers",
+    title: "Teachers",
+    singular: "Teacher",
+    description: "Add the teachers who take classes at this school.",
+    titleKey: "name",
+    view: "person",
+    columns: [
+      { key: "name", label: "Name", kind: "person", sub: "email" },
+      { key: "subject", label: "Main subject" },
+      { key: "sections", label: "Sections", kind: "number" },
+      { key: "phone", label: "Phone" },
+      { key: "joined", label: "Joined", kind: "date" },
+      { key: "status", label: "Account status", kind: "badge" },
+      { key: "email", label: "Email", detailOnly: true },
+      { key: "qualification", label: "Qualification", detailOnly: true },
+    ],
+    rows: rows(111, TEACHER_NAMES.length, (i, r) => ({
+      name: TEACHER_NAMES[i],
+      email: emailFor(TEACHER_NAMES[i]),
+      subject: SUBJECTS[i % SUBJECTS.length],
+      sections: r.int(2, 6),
+      phone: r.phone(),
+      joined: shiftDate("2015-08-01", r.int(0, 3800)),
+      status: i === 9 ? "Invited" : "Active",
+      qualification: r.pick(["M.Sc.", "M.A.", "B.Ed.", "M.Phil.", "B.S."]),
+    })),
+    form: [personFields, { title: "Teaching", fields: [
+      { name: "subject", label: "Main subject", type: "select", options: SUBJECTS },
+      { name: "qualification", label: "Qualification" },
+      { name: "joined", label: "Joined on", type: "date" },
+    ] }],
+    createLabel: "Add teacher",
+    related: [{ slug: "course-offerings", matchKey: "teacher", title: "Subjects being taught" }],
+  },
+  {
+    slug: "parents",
+    title: "Parents",
+    singular: "Parent",
+    description: "Parents and guardians who can follow their children's progress.",
+    titleKey: "name",
+    view: "person",
+    columns: [
+      { key: "name", label: "Name", kind: "person", sub: "email" },
+      { key: "phone", label: "Phone" },
+      { key: "children", label: "Children", kind: "number" },
+      { key: "relationship", label: "Relationship" },
+      { key: "status", label: "Account status", kind: "badge" },
+      { key: "email", label: "Email", detailOnly: true },
+      { key: "occupation", label: "Occupation", detailOnly: true },
+    ],
+    rows: rows(112, PARENT_NAMES.length, (i, r) => ({
+      name: PARENT_NAMES[i],
+      email: emailFor(PARENT_NAMES[i], "gmail.com"),
+      phone: r.phone(),
+      children: r.int(1, 3),
+      relationship: r.pick(["Father", "Mother", "Guardian"]),
+      status: i % 8 === 3 ? "Invited" : "Active",
+      occupation: r.pick(["Army officer", "Engineer", "Doctor", "Teacher", "Business owner", "Civil servant"]),
+    })),
+    form: [personFields, { title: "Family", fields: [
+      { name: "relationship", label: "Relationship", type: "select", options: ["Father", "Mother", "Guardian"] },
+      { name: "occupation", label: "Occupation" },
+      { name: "children", label: "Link children", type: "select", options: STUDENT_NAMES, wide: true },
+    ] }],
+    createLabel: "Add parent",
+    related: [{ slug: "students", matchKey: "guardian", title: "Children" }],
   },
   {
     slug: "cohorts",
@@ -409,8 +710,131 @@ const list: Resource[] = [
     ] }],
     createLabel: "Add programme",
   },
+  {
+    slug: "admins",
+    title: "Administrators",
+    singular: "Administrator",
+    description: "People who manage the school's settings and records.",
+    titleKey: "name",
+    view: "person",
+    columns: [
+      { key: "name", label: "Name", kind: "person", sub: "email" },
+      { key: "role", label: "Role" },
+      { key: "lastSeen", label: "Last seen", kind: "date" },
+      { key: "status", label: "Status", kind: "badge" },
+      { key: "email", label: "Email", detailOnly: true },
+    ],
+    rows: rows(118, 5, (i, r) => ({
+      name: ["Azeem Abbasi", "Adil Mehmood", "Sadia Raza", "Kamran Butt", "Nida Farooq"][i],
+      email: ["admin", "adil", "sadia", "kamran", "nida"][i] + "@spsarmyschool.edu.pk",
+      role: ["Super admin", "Admin", "Principal", "Accountant", "Librarian"][i],
+      lastSeen: r.date(-6, 0),
+      status: "Active",
+    })),
+    form: [personFields, { title: "Access", fields: [
+      { name: "role", label: "Role", type: "select", options: ["Super admin", "Admin", "Principal", "Accountant", "Librarian"] },
+    ] }],
+    createLabel: "Add administrator",
+  },
+  {
+    slug: "account-invitations",
+    title: "Account invitations",
+    singular: "Invitation",
+    description: "Invitations waiting for someone to set up their account.",
+    titleKey: "email",
+    columns: [
+      { key: "email", label: "Email" },
+      { key: "name", label: "Name" },
+      { key: "role", label: "Role" },
+      { key: "sent", label: "Sent", kind: "date" },
+      { key: "expires", label: "Expires", kind: "date" },
+      { key: "status", label: "Status", kind: "badge" },
+    ],
+    rows: rows(119, 8, (i, r) => {
+      const name = pickName([...TEACHER_NAMES, ...PARENT_NAMES], i * 3);
+      const sent = r.date(-14, -1);
+      return {
+        email: emailFor(name, "gmail.com"),
+        name,
+        role: r.pick(["Teacher", "Parent", "Student", "Accountant"]),
+        sent,
+        expires: shiftDate(sent, 7),
+        status: r.pick(["Pending", "Pending", "Accepted", "Expired"]),
+      };
+    }),
+    form: [{ title: "Invite someone", fields: [
+      { name: "name", label: "Name", required: true },
+      { name: "email", label: "Email", type: "email", required: true },
+      { name: "role", label: "Role", type: "select", options: ["Teacher", "Parent", "Student", "Accountant", "Admin"] },
+    ] }],
+    createLabel: "Send invitation",
+    submitLabel: "Send invitation",
+  },
 
   // ----- Teaching ------------------------------------------------------------
+  {
+    slug: "subjects",
+    title: "Subjects",
+    singular: "Subject",
+    description: "Subjects the school teaches across its classes.",
+    titleKey: "name",
+    columns: [
+      { key: "name", label: "Name" },
+      { key: "code", label: "Code", kind: "mono" },
+      { key: "levels", label: "Classes" },
+      { key: "teachers", label: "Teachers", kind: "number" },
+      { key: "kind", label: "Kind" },
+    ],
+    rows: rows(120, SUBJECTS.length, (i, r) => ({
+      name: SUBJECTS[i],
+      code: SUBJECT_CODES[SUBJECTS[i]],
+      levels: i >= 4 && i <= 6 ? "Class 9–10" : "Class 1–10",
+      teachers: r.int(1, 5),
+      kind: i >= 10 ? "Elective" : "Core",
+    })),
+    form: [{ title: "Subject", fields: [
+      { name: "name", label: "Name", required: true },
+      { name: "code", label: "Short code" },
+      { name: "kind", label: "Kind", type: "select", options: ["Core", "Elective"] },
+      { name: "levels", label: "Taught in", type: "select", options: CLASSES },
+    ] }],
+    createLabel: "Add subject",
+    related: [{ slug: "course-offerings", matchKey: "subject" }],
+  },
+  {
+    slug: "course-offerings",
+    title: "Subjects being taught",
+    singular: "Subject offering",
+    description: "Which teacher takes which subject with which section this year.",
+    titleKey: "title",
+    columns: [
+      { key: "title", label: "Offering" },
+      { key: "subject", label: "Subject" },
+      { key: "section", label: "Section" },
+      { key: "teacher", label: "Teacher" },
+      { key: "periods", label: "Periods / week", kind: "number" },
+      { key: "learners", label: "Learners", kind: "number" },
+    ],
+    rows: rows(121, 24, (i, r) => {
+      const subject = SUBJECTS[i % 8];
+      const section = SECTIONS[i % SECTIONS.length];
+      return {
+        title: `${subject} · ${section}`,
+        subject,
+        section,
+        teacher: pickName(TEACHER_NAMES, i % 8),
+        periods: r.int(3, 7),
+        learners: r.int(22, 36),
+      };
+    }),
+    form: [{ title: "Offering", fields: [
+      { name: "subject", label: "Subject", type: "select", options: SUBJECTS },
+      { name: "section", label: "Section", type: "select", options: SECTIONS },
+      { name: "teacher", label: "Teacher", type: "select", options: TEACHER_NAMES },
+      { name: "periods", label: "Periods per week", type: "number" },
+    ] }],
+    createLabel: "Assign subject",
+  },
   {
     slug: "syllabi",
     title: "Syllabi",
@@ -1306,6 +1730,31 @@ const list: Resource[] = [
     createLabel: "Import a file",
     submitLabel: "Upload and check",
   },
+  {
+    slug: "roles",
+    title: "Roles",
+    singular: "Role",
+    description: "Roles decide what each person can see and do.",
+    titleKey: "name",
+    view: "permissions",
+    columns: [
+      { key: "name", label: "Role" },
+      { key: "people", label: "People", kind: "number" },
+      { key: "permissions", label: "Permissions", kind: "number" },
+      { key: "kind", label: "Kind", kind: "badge" },
+    ],
+    rows: rows(151, 9, (i, r) => ({
+      name: ["Super admin", "Admin", "Principal", "Teacher", "Student", "Parent", "Accountant", "Librarian", "Nurse"][i],
+      people: [1, 2, 1, 16, 48, 30, 2, 1, 1][i],
+      permissions: r.int(8, 120),
+      kind: i < 6 ? "Built in" : "Custom",
+    })),
+    form: [{ title: "Role", fields: [
+      { name: "name", label: "Name", required: true },
+      { name: "description", label: "Description", type: "textarea", wide: true },
+    ] }],
+    createLabel: "Create role",
+  },
 ];
 
 export const resources: Resource[] = [...list, ...financeResources];
@@ -1324,3 +1773,4 @@ export function rowTitle(resource: Resource, row: Row): string {
   return String(row[resource.titleKey] ?? `${resource.singular} ${row.id}`);
 }
 
+export { SCHOOL };

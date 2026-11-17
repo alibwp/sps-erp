@@ -3,7 +3,6 @@ import { notFound } from "next/navigation";
 import { Page } from "@/components/layout/page-header";
 import { ResourceForm } from "@/components/resource/resource-form";
 import { getResource, resources } from "@/lib/resources";
-import { DemoDataNotice } from "@/components/ui/demo";
 
 type Props = { params: Promise<{ resource: string }> };
 
@@ -25,7 +24,6 @@ export default async function ResourceCreatePage({ params }: Props) {
 
   return (
     <Page title={title} breadcrumbs={[{ label: resource.title, href: `/${resource.slug}` }, { label: title }]}>
-      <DemoDataNotice />
       <ResourceForm slug={resource.slug} />
     </Page>
   );

@@ -248,7 +248,7 @@ const bankAccountRows = rows(306, BANKS.length + 1, (i, r) => {
   const difference = i === 1 ? 18500 : i === 3 ? -4200 : 0;
   return {
     name: [...BANKS, "Meezan Bank — Payroll"][i],
-    title: ["SPS School — Fees", "SPS School — Operations", "SPS School — Collections", "SPS School — Salaries"][i],
+    title: ["SPS Army School — Fees", "SPS Army School — Operations", "SPS Army School — Collections", "SPS Army School — Salaries"][i],
     number: `•••• ${r.int(1000, 9999)}`,
     type: i === 3 ? "Payroll" : i === 1 ? "Current" : "Collection",
     book,
@@ -1883,7 +1883,7 @@ const reportsModule: Resource[] = [
       { name: "frequency", label: "Send", type: "select", options: ["Daily", "Weekly", "Monthly", "Quarterly", "Per term"] },
       { name: "format", label: "Format", type: "select", options: ["PDF", "Excel", "CSV"] },
       { name: "section", label: "Limit to class (optional)", type: "select", options: CLASSES },
-      { name: "recipients", label: "Email to", placeholder: "principal@spsschool.edu.pk", wide: true },
+      { name: "recipients", label: "Email to", placeholder: "principal@spsarmyschool.edu.pk", wide: true },
     ] }],
     createLabel: "Schedule a report",
   },

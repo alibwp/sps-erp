@@ -3,7 +3,7 @@
 import { useEffect, type ReactNode } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { CircleAlert } from "lucide-react";
-import { useAuth, useGateNavigation } from "@/components/auth/session";
+import { useAuth } from "@/components/auth/session";
 import { CommandPalette } from "@/components/layout/command-palette";
 import { Header } from "@/components/layout/header";
 import { PeriodBar } from "@/components/layout/period-bar";
@@ -13,15 +13,6 @@ import { SidebarProvider } from "@/components/layout/sidebar-context";
 import { Alert } from "@/components/ui/misc";
 import { ToastProvider } from "@/components/ui/toast";
 
-/** What the signed-in area shows until the session (and the address) is known. */
-export function ShellLoading() {
-  return (
-    <div className="flex min-h-screen items-center justify-center bg-background" aria-busy="true">
-      <p className="text-sm text-muted-foreground">Loading…</p>
-    </div>
-  );
-}
-
 /**
  * The signed-in layout: sidebar, header, working-period bar and content.
  * Without a session it sends the person to the login page.
@@ -30,13 +21,18 @@ export function AppShell({ children }: { children: ReactNode }) {
   const session = useAuth();
   const router = useRouter();
   const pathname = usePathname();
-  useGateNavigation(router.push);
 
   useEffect(() => {
     if (session.status === "signed-out") router.replace(`/login?next=${encodeURIComponent(pathname)}`);
   }, [session.status, pathname, router]);
 
-  if (session.status !== "signed-in") return <ShellLoading />;
+  if (session.status !== "signed-in") {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background" aria-busy="true">
+        <p className="text-sm text-muted-foreground">Loading…</p>
+      </div>
+    );
+  }
 
   return (
     <ToastProvider>

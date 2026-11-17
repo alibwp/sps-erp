@@ -3,7 +3,6 @@ import { ArrowUpRight, ClipboardCheck, TrendingUp } from "lucide-react";
 import { ButtonLink } from "@/components/ui/button";
 import { AreaChart, BarChart } from "@/components/ui/charts";
 import { SectionHeading } from "@/components/ui/misc";
-import { SampleBadge } from "@/components/ui/demo";
 import { Trend } from "@/components/dashboards/trends";
 import { DEMO_TODAY, shiftDate } from "@/lib/mock";
 import { getResource } from "@/lib/resources";
@@ -12,9 +11,6 @@ import { formatDate } from "@/lib/utils";
 // Dashboard sections the reference shows to every role holding the matching
 // permission: attendance ("read attendance"), the calendar ("read calendar
 // event") and notices ("read notice").
-
-/** Learners on roll in the sample attendance figures. */
-const SAMPLE_ON_ROLL = 316;
 
 const ATTENDANCE_LAST_7_DAYS = [
   { label: "Thu", rate: 94 },
@@ -35,18 +31,14 @@ const ATTENDANCE_BY_WEEK = [
 
 /** Today's register figures and the last seven days of attendance. */
 export function AttendanceToday() {
-  // Sample figures: attendance has no backend yet.
-  const activeStudents = SAMPLE_ON_ROLL;
+  const activeStudents = (getResource("students")?.rows ?? []).filter((student) => student.status === "Active").length;
 
   return (
     <section className="min-w-0" aria-labelledby="today-overview">
       <SectionHeading title="Attendance today" id="today-overview">
-        <span className="flex items-center gap-2">
-          <SampleBadge />
-          <ButtonLink href="/attendance" variant="outline" size="sm">
-            <ClipboardCheck /> Take attendance
-          </ButtonLink>
-        </span>
+        <ButtonLink href="/attendance" variant="outline" size="sm">
+          <ClipboardCheck /> Take attendance
+        </ButtonLink>
       </SectionHeading>
       <dl className="grid grid-cols-3 gap-4 py-4">
         <div className="flex flex-col-reverse">
@@ -93,12 +85,9 @@ export function NextSevenDays() {
   return (
     <section className="min-w-0" aria-labelledby="upcoming-overview">
       <SectionHeading title="Next 7 days" id="upcoming-overview">
-        <span className="flex items-center gap-2">
-          <SampleBadge />
-          <Link href="/calendar-events" className="inline-flex min-h-10 select-none items-center gap-1 text-sm text-muted-foreground hover:text-foreground">
-            Calendar <ArrowUpRight className="size-4" />
-          </Link>
-        </span>
+        <Link href="/calendar-events" className="inline-flex min-h-10 select-none items-center gap-1 text-sm text-muted-foreground hover:text-foreground">
+          Calendar <ArrowUpRight className="size-4" />
+        </Link>
       </SectionHeading>
       {upcoming.length === 0 ? (
         <p className="py-4 text-sm text-muted-foreground">Nothing scheduled.</p>
@@ -131,7 +120,6 @@ export function NextSevenDays() {
 export function AttendanceTrend() {
   return (
     <Trend
-      sample
       id="trend-attendance"
       title="Attendance"
       period="Last 4 weeks"
@@ -172,7 +160,7 @@ export function IncidentsTrend() {
   const total = INCIDENTS_BY_WEEK.reduce((sum, week) => sum + week.incidents, 0);
 
   return (
-    <Trend sample id="trend-incidents" title="Incidents" period="Last 8 weeks" value={String(thisWeek)} detail={`this week · ${total} in 8 weeks`}>
+    <Trend id="trend-incidents" title="Incidents" period="Last 8 weeks" value={String(thisWeek)} detail={`this week · ${total} in 8 weeks`}>
       <BarChart
         data={INCIDENTS_BY_WEEK}
         xKey="week"
@@ -191,12 +179,9 @@ export function NoticesSection() {
   return (
     <section className="min-w-0" aria-labelledby="notices-overview">
       <SectionHeading title="Notices" id="notices-overview">
-        <span className="flex items-center gap-2">
-          <SampleBadge />
-          <Link href="/notices" className="inline-flex min-h-10 select-none items-center gap-1 text-sm text-muted-foreground hover:text-foreground">
-            All notices <ArrowUpRight className="size-4" />
-          </Link>
-        </span>
+        <Link href="/notices" className="inline-flex min-h-10 select-none items-center gap-1 text-sm text-muted-foreground hover:text-foreground">
+          All notices <ArrowUpRight className="size-4" />
+        </Link>
       </SectionHeading>
       {notices.length === 0 ? (
         <p className="py-4 text-sm text-muted-foreground">No current notices.</p>

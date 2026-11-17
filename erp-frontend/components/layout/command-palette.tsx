@@ -5,15 +5,14 @@ import { ArrowRight, CornerDownLeft, Search } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
 import { useSidebar } from "@/components/layout/sidebar-context";
 import { Kbd } from "@/components/ui/misc";
-import { useAccess, useSession } from "@/components/auth/session";
-import type { Access } from "@/lib/access";
+import { useSession } from "@/components/auth/session";
 import { commandItemsFor, type CommandItem } from "@/lib/nav";
 import type { RoleId } from "@/lib/roles";
 import { cn } from "@/lib/utils";
 
-/** The pages the signed-in person can open, plus their own profile. */
-function itemsFor(role: RoleId, access: Access | undefined): CommandItem[] {
-  return [...commandItemsFor(role, access), { label: "Profile", href: "/profile", group: "Account" }];
+/** The pages the signed-in role can open, plus their own profile. */
+function itemsFor(role: RoleId): CommandItem[] {
+  return [...commandItemsFor(role), { label: "Profile", href: "/profile", group: "Account" }];
 }
 
 /** Ctrl/⌘ K search across every page, as in the reference. */
@@ -51,8 +50,7 @@ function Palette({ onClose, onSelect }: { onClose: () => void; onSelect: (href: 
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const { role } = useSession();
-  const access = useAccess();
-  const items = useMemo(() => itemsFor(role.id, access), [role.id, access]);
+  const items = useMemo(() => itemsFor(role.id), [role.id]);
 
   const results = useMemo(() => {
     const needle = query.trim().toLowerCase();

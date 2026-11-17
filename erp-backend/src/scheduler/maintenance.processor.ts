@@ -6,11 +6,15 @@ import { HeartbeatService } from '../health/heartbeat.service.js';
 import { IdentityMaintenance } from '../identity/identity-maintenance.service.js';
 import { AppWorkerHost } from '../queue/app-worker-host.js';
 import { WORKER_OPTIONS } from '../queue/queue-connections.js';
+import { NoticePublisher } from '../notices/notice-publisher.service.js';
 import { QUEUES } from '../queue/queue.module.js';
+import { StaffProfiles } from '../staff/staff-profiles.service.js';
 import {
   ACADEMIC_CALENDAR_REMINDERS_JOB,
+  END_LEAVERS_ACCESS_JOB,
   GENERATE_ACADEMIC_CYCLES_JOB,
   OPEN_ACADEMIC_PERIODS_JOB,
+  PROCESS_NOTICES_JOB,
   PRUNE_INVITATIONS_JOB,
   QUEUE_HEARTBEAT_JOB,
 } from './scheduled-jobs.js';
@@ -23,6 +27,8 @@ export class MaintenanceProcessor extends AppWorkerHost {
     private readonly heartbeats: HeartbeatService,
     private readonly identity: IdentityMaintenance,
     private readonly calendar: AcademicCalendarJobs,
+    private readonly staff: StaffProfiles,
+    private readonly notices: NoticePublisher,
   ) {
     super();
   }
@@ -44,6 +50,18 @@ export class MaintenanceProcessor extends AppWorkerHost {
       case ACADEMIC_CALENDAR_REMINDERS_JOB:
         await this.calendar.sendReminders();
         return;
+      case END_LEAVERS_ACCESS_JOB: {
+        const ended = await this.staff.endLeaversAccess();
+        this.logger.log(`${ended} leavers lost access`);
+        return;
+      }
+      case PROCESS_NOTICES_JOB: {
+        const done = await this.notices.processDue();
+        this.logger.log(
+          `${done.published} notices published, ${done.expired} expired`,
+        );
+        return;
+      }
       default:
         this.logger.warn(`Unknown maintenance job "${job.name}" ignored`);
     }

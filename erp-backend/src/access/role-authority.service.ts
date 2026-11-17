@@ -129,12 +129,14 @@ export class RoleAuthority {
   }
 
   // Whether an active member of the campus whose account is not suspended
-  // or archived holds "manage role" through a role held there. A role
+  // or archived holds "manage role" through a role held there; with
+  // exceptUserId, somebody other than that person. A role
   // outlives the membership, so only active members count. Reads the
   // tables directly, so changes made earlier in the transaction count.
   async campusHasARoleManager(
     manager: EntityManager,
     schoolId: string,
+    exceptUserId?: string,
   ): Promise<boolean> {
     const rows = (await manager.query(
       `SELECT 1
@@ -146,8 +148,9 @@ export class RoleAuthority {
          JOIN users u
            ON u.id = a.user_id AND u.account_status NOT IN ('suspended', 'archived') AND u.deleted_at IS NULL
         WHERE a.school_id = $1 AND p.name = $2
+          AND ($3::uuid IS NULL OR a.user_id <> $3::uuid)
         LIMIT 1`,
-      [schoolId, CampusPermission.ManageRole],
+      [schoolId, CampusPermission.ManageRole, exceptUserId ?? null],
     )) as unknown[];
     return rows.length > 0;
   }

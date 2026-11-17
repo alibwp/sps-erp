@@ -1,6 +1,6 @@
 import { SectionHeading } from "@/components/ui/misc";
 import { AttendanceToday, AttendanceTrend, NextSevenDays, NoticesSection } from "@/components/dashboards/school-sections";
-import { ActiveStudentsSnapshot, EnrolmentByClassTrend } from "@/components/dashboards/live";
+import { ActiveStudentsSnapshot, EnrolmentByClassTrend } from "@/components/dashboards/trends";
 
 /**
  * The teacher's dashboard, as the reference shows it. A teacher reads

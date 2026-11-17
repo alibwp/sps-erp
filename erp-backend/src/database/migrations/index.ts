@@ -7,6 +7,11 @@ import { SeedWeekdays1794150000001 } from './1794150000001-SeedWeekdays.js';
 import { Curriculum1794160000000 } from './1794160000000-Curriculum.js';
 import { Enrollments1794170000000 } from './1794170000000-Enrollments.js';
 import { DemoAccounts1794180000000 } from './1794180000000-DemoAccounts.js';
+import { MovingLearners1794190000000 } from './1794190000000-MovingLearners.js';
+import { People1794200000000 } from './1794200000000-People.js';
+import { Staff1794210000000 } from './1794210000000-Staff.js';
+import { Cohorts1794220000000 } from './1794220000000-Cohorts.js';
+import { Notices1794230000000 } from './1794230000000-Notices.js';
 
 // Every migration, oldest first. Add each new migration file here; a unit
 // test fails when a file in this folder is missing from the list.
@@ -20,4 +25,9 @@ export const migrations = [
   Curriculum1794160000000,
   Enrollments1794170000000,
   DemoAccounts1794180000000,
+  MovingLearners1794190000000,
+  People1794200000000,
+  Staff1794210000000,
+  Cohorts1794220000000,
+  Notices1794230000000,
 ];

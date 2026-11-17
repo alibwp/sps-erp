@@ -3,7 +3,6 @@ import { notFound } from "next/navigation";
 import { Page } from "@/components/layout/page-header";
 import { ResourceForm } from "@/components/resource/resource-form";
 import { getResource, getRow, resources, rowTitle } from "@/lib/resources";
-import { DemoDataNotice } from "@/components/ui/demo";
 
 type Props = { params: Promise<{ resource: string; id: string }> };
 
@@ -36,7 +35,6 @@ export default async function ResourceEditPage({ params }: Props) {
         { label: "Edit" },
       ]}
     >
-      <DemoDataNotice />
       <ResourceForm slug={resource.slug} id={row.id} />
     </Page>
   );

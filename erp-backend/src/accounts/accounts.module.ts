@@ -22,6 +22,6 @@ import { Accounts } from './accounts.service.js';
     OrganizationInvitationsController,
   ],
   providers: [AccountAuthority, AccountQueries, Accounts],
-  exports: [AccountAuthority, Accounts],
+  exports: [AccountAuthority, Accounts, AccountQueries],
 })
 export class AccountsModule {}

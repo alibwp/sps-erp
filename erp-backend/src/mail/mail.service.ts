@@ -47,7 +47,8 @@ export class MailService {
     );
   }
 
-  private async withoutDemoAccounts(to: string | string[]): Promise<string[]> {
+  // The addresses that may be mailed: demo accounts are left out.
+  async withoutDemoAccounts(to: string | string[]): Promise<string[]> {
     const addresses = Array.isArray(to) ? to : [to];
     const rows = (await this.dataSource.query(
       'SELECT email FROM users WHERE demo_account AND email = ANY($1::text[])',

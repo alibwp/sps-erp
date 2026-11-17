@@ -8,6 +8,7 @@ import {
   DEMO_ACCOUNTS,
   removeDemoUsers,
   seedDemoUsers,
+  seedDemoUsersWithHash,
 } from '../src/demo/seed-demo-users.js';
 import { InvitationService } from '../src/identity/invitations/invitation.service.js';
 import { PasswordHasher } from '../src/identity/password-hasher.js';
@@ -45,6 +46,19 @@ describe('Demo accounts (e2e)', () => {
         ORDER BY r.name`,
       [email],
     );
+
+  // The emails of the guardians linked to a learner.
+  const guardianOf = async (email: string) =>
+    (
+      await dataSource.query(
+        `SELECT g.email FROM parent_record_user link
+           JOIN parent_records record ON record.id = link.parent_record_id
+           JOIN users g ON g.id = record.user_id
+           JOIN users l ON l.id = link.user_id
+          WHERE l.email = $1 ORDER BY g.email`,
+        [email],
+      )
+    ).map((row: { email: string }) => row.email);
 
   const userRow = async (email: string) =>
     (
@@ -119,6 +133,10 @@ describe('Demo accounts (e2e)', () => {
     expect(await rolesOf('librarian@gmail.com')).toEqual([
       { name: 'librarian', global: false },
     ]);
+    expect(await rolesOf('parent@gmail.com')).toEqual([
+      { name: 'parent', global: false },
+    ]);
+    expect(await guardianOf('student@gmail.com')).toEqual(['parent@gmail.com']);
     expect(await rolesOf('student@gmail.com')).toEqual([
       { name: 'student', global: false },
     ]);
@@ -319,7 +337,34 @@ describe('Demo accounts (e2e)', () => {
       expect(mail.sent).toHaveLength(0);
     });
 
-    it('does nothing once any demo account has existed, even archived', async () => {
+    it('makes only the demo emails that have never existed', async () => {
+      const hash = await app.get(PasswordHasher).hash(PASSWORD);
+      // The live site before the parent was added, then switched off.
+      await seedDemoUsersWithHash(app, hash, {
+        only: DEMO_ACCOUNTS.filter((a) => a.email !== 'parent@gmail.com').map(
+          (a) => a.email,
+        ),
+      });
+      await removeDemoUsers(app);
+
+      expect(
+        await makeLiveDemoAccountsOnce(app, LIVE_RAILWAY_DOMAIN, hash),
+      ).toBe('made');
+
+      expect(await userRow('parent@gmail.com')).toEqual(SIGN_IN_ONLY);
+      expect(await guardianOf('student@gmail.com')).toEqual([
+        'parent@gmail.com',
+      ]);
+      // What was removed stays removed.
+      expect(
+        await dataSource.query(
+          "SELECT count(*)::int AS n FROM users WHERE demo_account AND account_status = 'archived'",
+        ),
+      ).toEqual([{ n: DEMO_ACCOUNTS.length - 1 }]);
+      await signIn(app, 'parent@gmail.com');
+    });
+
+    it('does nothing once every demo account has existed, even archived', async () => {
       await seedDemoUsers(app, { password: PASSWORD });
       await removeDemoUsers(app);
 
