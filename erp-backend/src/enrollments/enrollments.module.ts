@@ -19,6 +19,7 @@ import { AdmissionWaitlistEntry } from './entities/admission-waitlist-entry.enti
 import { CampusMoveRequest } from './entities/campus-move-request.entity.js';
 import { EnrollmentPlacement } from './entities/enrollment-placement.entity.js';
 import { EnrollmentStatusChange } from './entities/enrollment-status-change.entity.js';
+import { ParentRecord } from './entities/parent-record.entity.js';
 import { Promotion } from './entities/promotion.entity.js';
 import { StudentRecord } from './entities/student-record.entity.js';
 import { GraduatedGuard } from './graduated.guard.js';
@@ -63,6 +64,7 @@ export const EnrollmentRuleMessages = {
       Promotion,
       AdmissionWaitlistEntry,
       CampusMoveRequest,
+      ParentRecord,
     ]),
     AccessModule,
     AccountsModule,
@@ -97,6 +99,7 @@ export const EnrollmentRuleMessages = {
     Students,
     GraduatedGuard,
     Transfers,
+    StudentViews,
   ],
 })
 export class EnrollmentsModule implements OnModuleInit {

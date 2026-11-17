@@ -36,6 +36,7 @@ import { AuthGuard, PasswordChangeGuard } from './identity/auth/auth.guard.js';
 import { IdentityModule } from './identity/identity.module.js';
 import { MailModule } from './mail/mail.module.js';
 import { OrganizationsModule } from './organizations/organizations.module.js';
+import { PeopleModule } from './people/people.module.js';
 import { QueueModule } from './queue/queue.module.js';
 import { RedisModule } from './redis/redis.module.js';
 import { SchedulerModule } from './scheduler/scheduler.module.js';
@@ -74,6 +75,7 @@ import { StorageModule } from './storage/storage.module.js';
     AcademicModule,
     CurriculumModule,
     EnrollmentsModule,
+    PeopleModule,
     SchedulerModule,
   ],
   controllers: [AppController],

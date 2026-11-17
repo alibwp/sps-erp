@@ -32,9 +32,11 @@ export class AccountQueries {
     private readonly clock: Clock,
   ) {}
 
+  // With a role, only the people holding that role at this campus.
   async list(
     schoolId: string,
     query: AccountListQueryDto,
+    roleName?: string,
   ): Promise<Paginated<AccountDto>> {
     const qb = this.dataSource.manager
       .createQueryBuilder(User, 'user')
@@ -45,6 +47,13 @@ export class AccountQueries {
         "membership.userId = user.id AND membership.schoolId = :schoolId AND membership.status = 'active'",
         { schoolId },
       );
+    if (roleName) {
+      qb.andWhere(
+        `EXISTS (SELECT 1 FROM model_has_roles a JOIN roles r ON r.id = a.role_id
+                  WHERE a.user_id = user.id AND a.school_id = :schoolId AND r.name = :roleName)`,
+        { roleName },
+      );
+    }
     if (query.accountStatus) {
       qb.andWhere('user.accountStatus = :status', {
         status: query.accountStatus,

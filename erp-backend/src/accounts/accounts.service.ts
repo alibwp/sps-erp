@@ -1,5 +1,5 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { DataSource, EntityManager } from 'typeorm';
+import { DataSource, EntityManager, Not } from 'typeorm';
 import {
   Forbidden,
   OrganizationPermission,
@@ -46,6 +46,50 @@ export const NOT_PENDING =
   'Only a pending invitation can be sent again or revoked.';
 export const PLATFORM_ADMIN_STATUS =
   'A platform administrator account cannot be suspended or archived.';
+
+export const PersonMessages = {
+  emailElsewhere:
+    'This person also belongs to another school, so only they can change their email.',
+  emailBeyond:
+    'This person has authority beyond this school, so only they can change their email.',
+  emailHoldsMore:
+    'This person holds more at this school than you do, so only they can change their email.',
+  removeHoldsMore: 'This person holds more at this campus than you do.',
+  birthday: 'The birthday field must be a date before today.',
+} as const;
+
+// The details a campus may change about one of its people.
+export type PersonDetails = Partial<
+  Pick<
+    User,
+    | 'name'
+    | 'email'
+    | 'birthday'
+    | 'gender'
+    | 'phone'
+    | 'address'
+    | 'addressLine2'
+    | 'city'
+    | 'state'
+    | 'postalCode'
+    | 'country'
+    | 'nationality'
+  >
+>;
+
+const DETAIL_FIELDS = [
+  'name',
+  'birthday',
+  'gender',
+  'phone',
+  'address',
+  'addressLine2',
+  'city',
+  'state',
+  'postalCode',
+  'country',
+  'nationality',
+] as const;
 
 const PROFILE_FIELDS = [
   'name',
@@ -361,6 +405,118 @@ export class Accounts {
       throw new Forbidden(NOT_PENDING);
     }
     return invitation;
+  }
+
+  // Before a transaction that changes a person's details: a new address
+  // must have a domain that can receive mail (a DNS lookup).
+  async checkNewEmail(email: string | undefined): Promise<void> {
+    if (email === undefined) return;
+    const known = await this.dataSource.manager.findOne(User, {
+      where: { email: normalizeEmail(email) },
+      withDeleted: true,
+    });
+    if (!known && !(await this.emailDomains.canReceiveMail(email))) {
+      throw new ValidationFailed({ email: [Messages.emailInvalid] });
+    }
+  }
+
+  // Changes a person's details (UserService::updateUser). A new email is a
+  // new way into their account, so only they may change it when they
+  // belong to another campus, hold authority beyond this one, or hold more
+  // here than the editor.
+  async updateDetailsIn(
+    manager: EntityManager,
+    actorId: string,
+    schoolId: string,
+    person: User,
+    details: PersonDetails,
+    today: string,
+  ): Promise<User> {
+    if (details.birthday && details.birthday >= today) {
+      throw new ValidationFailed({ birthday: [PersonMessages.birthday] });
+    }
+    const email = details.email ? normalizeEmail(details.email) : undefined;
+    if (email !== undefined && email !== person.email) {
+      if (await this.belongsToAnotherSchool(manager, person.id, schoolId)) {
+        throw new ValidationFailed({ email: [PersonMessages.emailElsewhere] });
+      }
+      if (await this.authority.holdsPowerBeyond(manager, person.id, schoolId)) {
+        throw new ValidationFailed({ email: [PersonMessages.emailBeyond] });
+      }
+      if (
+        actorId !== person.id &&
+        (await this.roleAuthority.holdsMoreThan(
+          manager,
+          person.id,
+          actorId,
+          schoolId,
+        ))
+      ) {
+        throw new ValidationFailed({ email: [PersonMessages.emailHoldsMore] });
+      }
+      const taken = await manager.exists(User, {
+        where: { email, id: Not(person.id) },
+        withDeleted: true,
+      });
+      if (taken) throw new ValidationFailed({ email: [Messages.emailTaken] });
+      person.email = email;
+      person.emailVerifiedAt = null;
+    }
+    for (const field of DETAIL_FIELDS) {
+      if (field === 'name' && !details.name) continue;
+      if (details[field] !== undefined) {
+        (person as unknown as Record<string, unknown>)[field] = details[field];
+      }
+    }
+    return manager.save(person);
+  }
+
+  // Removes a person from the campus (UserService::deleteUser): the
+  // membership ends first, which ends what they still do here, then the
+  // account is deleted unless they keep it (keepsAccountWhenRemovedHere).
+  async removeFromCampusIn(
+    manager: EntityManager,
+    actorId: string,
+    schoolId: string,
+    userId: string,
+  ): Promise<void> {
+    await this.memberships.end(manager, userId, schoolId);
+    if (await this.keepsAccountWhenRemovedHere(manager, userId, schoolId)) {
+      return;
+    }
+    const person = await manager.findOneOrFail(User, { where: { id: userId } });
+    await this.invitations.revokeIn(manager, person, actorId);
+    await this.sessions.revokeAllForUser(manager, person.id);
+    await manager.softDelete(User, { id: person.id });
+    await this.audit.record(manager, {
+      action: AuditAction.AccountDeleted,
+      subject: { type: 'user', id: person.id },
+      context: { email: person.email, school_id: schoolId },
+      schoolId,
+    });
+  }
+
+  // User::keepsAccountWhenRemovedHere: still a member of another campus, or
+  // access beyond this one.
+  async keepsAccountWhenRemovedHere(
+    manager: EntityManager,
+    userId: string,
+    schoolId: string,
+  ): Promise<boolean> {
+    return (
+      (await this.belongsToAnotherSchool(manager, userId, schoolId)) ||
+      (await this.authority.holdsPowerBeyond(manager, userId, schoolId))
+    );
+  }
+
+  private belongsToAnotherSchool(
+    manager: EntityManager,
+    userId: string,
+    schoolId: string,
+  ): Promise<boolean> {
+    return manager.exists(SchoolMembership, {
+      where: { userId, schoolId: Not(schoolId), status: 'active' },
+    });
   }
 
   // Ends the person's access to this campus. They keep their account,
