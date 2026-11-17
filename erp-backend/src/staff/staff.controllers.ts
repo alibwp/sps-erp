@@ -37,14 +37,21 @@ import {
 } from '../identity/auth/auth-context.js';
 import type { StaffAvailability } from './entities/staff-availability.entity.js';
 import type { StaffCredential } from './entities/staff-credential.entity.js';
+import type { StaffLeaveRequest } from './entities/staff-leave-request.entity.js';
 import type { StaffProfile } from './entities/staff-profile.entity.js';
+import { StaffLeave, daysBetween } from './staff-leave.service.js';
 import { StaffProfiles } from './staff-profiles.service.js';
 import {
+  ChangeLeaveStatusDto,
   CreateStaffProfileDto,
   CredentialInputDto,
   HoursInputDto,
+  LeaveQueryDto,
+  RequestLeaveDto,
   StaffCredentialDto,
   StaffHoursDto,
+  StaffLeaveDetailDto,
+  StaffLeaveDto,
   StaffProfileDetailDto,
   StaffProfileDto,
   StaffProfileQueryDto,
@@ -103,6 +110,25 @@ function hoursDto(hours: StaffAvailability): StaffHoursDto {
     dayOfWeek: hours.dayOfWeek,
     startsAt: hours.startsAt.slice(0, 5),
     endsAt: hours.endsAt.slice(0, 5),
+  };
+}
+
+function leaveDto(request: StaffLeaveRequest): StaffLeaveDto {
+  return {
+    id: request.id,
+    staffProfileId: request.staffProfileId,
+    person: person(request.staffProfile.user)!,
+    type: request.type,
+    status: request.status,
+    startsOn: request.startsOn,
+    endsOn: request.endsOn,
+    days: daysBetween(request.startsOn, request.endsOn),
+    reason: request.reason,
+    requestedBy: person(request.requestedBy),
+    decidedBy: person(request.decidedBy),
+    decidedAt: request.decidedAt,
+    decisionNote: request.decisionNote,
+    createdAt: request.createdAt,
   };
 }
 
@@ -309,5 +335,116 @@ export class StaffProfilesController {
 
   private today(campus: CampusAccess): string {
     return this.clock.schoolToday(campus.school.timezone);
+  }
+}
+
+// Staff leave (reference StaffLeaveRequestController, StaffLeaveBoard,
+// StaffLeaveRequestPolicy).
+@ApiTags('Staff leave')
+@ApiBearerAuth('bearer')
+@CampusRoute()
+@RequireFeature('staff_operations')
+@Controller('staff-leave')
+export class StaffLeaveController {
+  constructor(private readonly leave: StaffLeave) {}
+
+  @Get()
+  @RequirePermission('read staff leave')
+  @ApiOperation({ summary: 'The campus’s leave, latest first' })
+  @ApiOkResponse({ type: [StaffLeaveDto] })
+  @ApiErrorResponses(...ERRORS)
+  async list(
+    @Campus() campus: CampusAccess,
+    @Query() query: LeaveQueryDto,
+  ): Promise<Paginated<StaffLeaveDto>> {
+    const page = await this.leave.list(campus.school.id, query);
+    return { data: page.data.map(leaveDto), meta: page.meta };
+  }
+
+  @Post()
+  @RequireVerifiedEmail()
+  @RequirePermission('request staff leave')
+  @ApiOperation({
+    summary: 'Ask for leave',
+    description:
+      'Refused when it ends before it starts, when the person has left, and when it overlaps leave already requested, approved or taken.',
+  })
+  @ApiCreatedResponse({ type: StaffLeaveDetailDto })
+  @ApiErrorResponses(...WRITE_ERRORS)
+  async request(
+    @CurrentAuth() auth: AuthContext,
+    @Campus() campus: CampusAccess,
+    @Body() body: RequestLeaveDto,
+  ): Promise<StaffLeaveDetailDto> {
+    const request = await this.leave.request(
+      auth.user.id,
+      campus.school.id,
+      body,
+    );
+    return this.detail(auth, campus, request.id);
+  }
+
+  @Get(':id')
+  @ApiOperation({
+    summary: 'One leave request with its history',
+    description: '"read staff leave", or your own leave.',
+  })
+  @ApiOkResponse({ type: StaffLeaveDetailDto })
+  @ApiErrorResponses(...ERRORS)
+  show(
+    @CurrentAuth() auth: AuthContext,
+    @Campus() campus: CampusAccess,
+    @Param('id', ParseUUIDPipe) id: string,
+  ): Promise<StaffLeaveDetailDto> {
+    return this.detail(auth, campus, id);
+  }
+
+  @Post(':id/status-changes')
+  @HttpCode(HttpStatus.OK)
+  @RequireVerifiedEmail()
+  @ApiOperation({
+    summary: 'Move leave on',
+    description:
+      'requested → approved, declined, cancelled; approved → taken, cancelled; declined → requested. Approving and declining need "approve staff leave" and never on your own leave; taken needs "approve staff leave"; cancelling and asking again are for the person it is for or anyone with "approve staff leave". Approval waits for the cover check.',
+  })
+  @ApiOkResponse({ type: StaffLeaveDetailDto })
+  @ApiErrorResponses(...WRITE_ERRORS)
+  async changeStatus(
+    @CurrentAuth() auth: AuthContext,
+    @Campus() campus: CampusAccess,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() body: ChangeLeaveStatusDto,
+  ): Promise<StaffLeaveDetailDto> {
+    await this.leave.changeStatus(
+      viewer(auth, campus),
+      campus.school.id,
+      id,
+      body.status,
+      body.reason ?? null,
+    );
+    return this.detail(auth, campus, id);
+  }
+
+  private async detail(
+    auth: AuthContext,
+    campus: CampusAccess,
+    id: string,
+  ): Promise<StaffLeaveDetailDto> {
+    const request = await this.leave.find(
+      campus.school.id,
+      id,
+      viewer(auth, campus),
+    );
+    const history = await this.leave.history(id);
+    return {
+      ...leaveDto(request),
+      history: history.map((step) => ({
+        fromStatus: step.fromStatus,
+        toStatus: step.toStatus,
+        reason: step.reason,
+        changedBy: person(step.changedBy),
+        createdAt: step.createdAt,
+      })),
+    };
   }
 }

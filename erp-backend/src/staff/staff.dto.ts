@@ -175,6 +175,55 @@ export class HoursInputDto {
   endsAt: string;
 }
 
+export class LeaveQueryDto extends PaginationQueryDto {
+  @ApiPropertyOptional({ enum: LEAVE_STATUSES })
+  @IsOptional()
+  @IsIn(LEAVE_STATUSES)
+  status?: LeaveStatus;
+
+  @ApiPropertyOptional({ enum: LEAVE_TYPES })
+  @IsOptional()
+  @IsIn(LEAVE_TYPES)
+  type?: LeaveType;
+
+  @ApiPropertyOptional({ format: 'uuid' })
+  @IsOptional()
+  @IsUUID('all')
+  staffProfileId?: string;
+}
+
+export class RequestLeaveDto {
+  @ApiProperty({ format: 'uuid' })
+  @IsUUID('all')
+  staffProfileId: string;
+
+  @ApiProperty({ enum: LEAVE_TYPES })
+  @IsIn(LEAVE_TYPES)
+  type: LeaveType;
+
+  @ApiProperty({ format: 'date' })
+  @IsCalendarDay()
+  startsOn: string;
+
+  @ApiProperty({ format: 'date' })
+  @IsCalendarDay()
+  endsOn: string;
+
+  @ApiPropertyOptional({ maxLength: 500, nullable: true, type: String })
+  @OptionalReason()
+  reason?: string | null;
+}
+
+export class ChangeLeaveStatusDto {
+  @ApiProperty({ enum: LEAVE_STATUSES })
+  @IsIn(LEAVE_STATUSES)
+  status: LeaveStatus;
+
+  @ApiPropertyOptional({ maxLength: 500, nullable: true, type: String })
+  @OptionalReason()
+  reason?: string | null;
+}
+
 // ---------- Responses ----------
 
 export class StaffProfileDto {
@@ -223,4 +272,37 @@ export class StaffProfileDetailDto extends StaffProfileDto {
   @ApiProperty({ type: [StaffCredentialDto] })
   credentials: StaffCredentialDto[];
   @ApiProperty({ type: [StaffHoursDto] }) availability: StaffHoursDto[];
+}
+
+export class StaffLeaveDto {
+  @ApiProperty({ format: 'uuid' }) id: string;
+  @ApiProperty({ format: 'uuid' }) staffProfileId: string;
+  @ApiProperty({ type: PersonDto }) person: PersonDto;
+  @ApiProperty({ enum: LEAVE_TYPES }) type: LeaveType;
+  @ApiProperty({ enum: LEAVE_STATUSES }) status: LeaveStatus;
+  @ApiProperty({ format: 'date' }) startsOn: string;
+  @ApiProperty({ format: 'date' }) endsOn: string;
+  @ApiProperty() days: number;
+  @ApiProperty({ nullable: true, type: String }) reason: string | null;
+  @ApiProperty({ type: PersonDto, nullable: true })
+  requestedBy: PersonDto | null;
+  @ApiProperty({ type: PersonDto, nullable: true })
+  decidedBy: PersonDto | null;
+  @ApiProperty({ format: 'date-time', nullable: true, type: String })
+  decidedAt: Date | null;
+  @ApiProperty({ nullable: true, type: String }) decisionNote: string | null;
+  @ApiProperty({ format: 'date-time' }) createdAt: Date;
+}
+
+export class LeaveHistoryDto {
+  @ApiProperty({ enum: LEAVE_STATUSES }) fromStatus: LeaveStatus;
+  @ApiProperty({ enum: LEAVE_STATUSES }) toStatus: LeaveStatus;
+  @ApiProperty({ nullable: true, type: String }) reason: string | null;
+  @ApiProperty({ type: PersonDto, nullable: true })
+  changedBy: PersonDto | null;
+  @ApiProperty({ format: 'date-time' }) createdAt: Date;
+}
+
+export class StaffLeaveDetailDto extends StaffLeaveDto {
+  @ApiProperty({ type: [LeaveHistoryDto] }) history: LeaveHistoryDto[];
 }

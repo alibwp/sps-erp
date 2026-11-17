@@ -81,6 +81,8 @@ export const AuditAction = {
   AdmissionWaitlistDeclined: 'admission_waitlist.declined',
   GuardianLinkChanged: 'guardian.link_changed',
   StaffProfileChanged: 'staff_profile.changed',
+  StaffLeaveRequested: 'staff_leave.requested',
+  StaffLeaveStatusChanged: 'staff_leave.status_changed',
   AccountDeleted: 'account.deleted',
 } as const;
 
