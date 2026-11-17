@@ -8,6 +8,7 @@ import { Curriculum1794160000000 } from './1794160000000-Curriculum.js';
 import { Enrollments1794170000000 } from './1794170000000-Enrollments.js';
 import { DemoAccounts1794180000000 } from './1794180000000-DemoAccounts.js';
 import { MovingLearners1794190000000 } from './1794190000000-MovingLearners.js';
+import { People1794200000000 } from './1794200000000-People.js';
 
 // Every migration, oldest first. Add each new migration file here; a unit
 // test fails when a file in this folder is missing from the list.
@@ -22,4 +23,5 @@ export const migrations = [
   Enrollments1794170000000,
   DemoAccounts1794180000000,
   MovingLearners1794190000000,
+  People1794200000000,
 ];
