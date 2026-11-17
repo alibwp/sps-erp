@@ -87,6 +87,10 @@ export const AuditAction = {
   CohortMembershipChanged: 'cohort.membership_changed',
   ProgramChanged: 'program.changed',
   ProgramParticipationChanged: 'program.participation_changed',
+  NoticePublished: 'notice.published',
+  NoticeScheduled: 'notice.scheduled',
+  NoticeExpired: 'notice.expired',
+  NoticeRevised: 'notice.revised',
   AccountDeleted: 'account.deleted',
 } as const;
 

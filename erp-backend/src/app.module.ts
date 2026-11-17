@@ -12,6 +12,7 @@ import { AcademicPeriodGuard } from './academic/academic-period.guard.js';
 import { AcademicModule } from './academic/academic.module.js';
 import { CohortsModule } from './cohorts/cohorts.module.js';
 import { CalendarModule } from './calendar/calendar.module.js';
+import { NoticesModule } from './notices/notices.module.js';
 import { CurriculumModule } from './curriculum/curriculum.module.js';
 import { EnrollmentsModule } from './enrollments/enrollments.module.js';
 import { GraduatedGuard } from './enrollments/graduated.guard.js';
@@ -82,6 +83,7 @@ import { StorageModule } from './storage/storage.module.js';
     StaffModule,
     CohortsModule,
     CalendarModule,
+    NoticesModule,
     SchedulerModule,
   ],
   controllers: [AppController],
