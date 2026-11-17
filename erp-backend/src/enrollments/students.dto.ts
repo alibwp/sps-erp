@@ -24,7 +24,7 @@ const blankToNull = ({ value }: { value: unknown }) =>
 const present = (_object: object, value: unknown) =>
   value !== null && value !== undefined;
 
-function OptionalReason(): PropertyDecorator {
+export function OptionalReason(): PropertyDecorator {
   return (target, key) => {
     Transform(blankToNull)(target, key);
     ValidateIf(present)(target, key);

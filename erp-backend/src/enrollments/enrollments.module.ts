@@ -15,9 +15,15 @@ import { EnrollmentStatuses } from './enrollment-statuses.service.js';
 import { AcademicYearStudentRecord } from './entities/academic-year-student-record.entity.js';
 import { EnrollmentPlacement } from './entities/enrollment-placement.entity.js';
 import { EnrollmentStatusChange } from './entities/enrollment-status-change.entity.js';
+import { Promotion } from './entities/promotion.entity.js';
 import { StudentRecord } from './entities/student-record.entity.js';
 import { GraduatedGuard } from './graduated.guard.js';
 import { isEnrolledLearner, isEnrolledOnlyElsewhere } from './learners.js';
+import {
+  GraduationsController,
+  PromotionsController,
+} from './moving.controllers.js';
+import { Promotions } from './promotions.service.js';
 import { StudentViews } from './student-views.service.js';
 import { StudentsController } from './students.controller.js';
 import { Students } from './students.service.js';
@@ -41,6 +47,7 @@ export const EnrollmentRuleMessages = {
       EnrollmentPlacement,
       EnrollmentStatusChange,
       AcademicYearStudentRecord,
+      Promotion,
     ]),
     AccessModule,
     AccountsModule,
@@ -49,13 +56,18 @@ export const EnrollmentRuleMessages = {
     AcademicModule,
     CurriculumModule,
   ],
-  controllers: [StudentsController],
+  controllers: [
+    StudentsController,
+    PromotionsController,
+    GraduationsController,
+  ],
   providers: [
     EnrollmentPlacements,
     EnrollmentStatuses,
     Students,
     StudentViews,
     GraduatedGuard,
+    Promotions,
   ],
   exports: [EnrollmentPlacements, EnrollmentStatuses, Students, GraduatedGuard],
 })
