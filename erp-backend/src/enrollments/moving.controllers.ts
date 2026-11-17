@@ -35,12 +35,19 @@ import {
   AdmissionWaitlist,
   WaitlistMessages,
 } from './admission-waitlist.service.js';
+import { CampusMoves } from './campus-moves.service.js';
 import type { AdmissionWaitlistEntry } from './entities/admission-waitlist-entry.entity.js';
+import type { CampusMoveRequest } from './entities/campus-move-request.entity.js';
 import type { Promotion } from './entities/promotion.entity.js';
 import {
+  CampusMoveOutcomeDto,
+  CampusMoveRequestDto,
+  CampusMovesDto,
+  CampusSectionDto,
   GraduateStudentsDto,
   GraduationResultDto,
   JoinWaitlistDto,
+  MoveCampusDto,
   NoteDto,
   OfferWaitlistDto,
   PromoteStudentsDto,
@@ -104,6 +111,28 @@ function entryDto(view: {
     offeredAt: entry.offeredAt,
     decidedAt: entry.decidedAt,
     createdAt: entry.createdAt,
+  };
+}
+
+function moveDto(request: CampusMoveRequest): CampusMoveRequestDto {
+  const learner = request.studentRecord.user;
+  return {
+    id: request.id,
+    studentId: request.studentRecordId,
+    learner: learner ? { id: learner.id, name: learner.name } : null,
+    admissionNumber: request.studentRecord.admissionNumber,
+    from: { id: request.fromSchool.id, name: request.fromSchool.name },
+    to: { id: request.toSchool.id, name: request.toSchool.name },
+    academicCycleSectionId: request.academicCycleSectionId,
+    status: request.status,
+    reason: request.reason,
+    effectiveOn: request.effectiveOn,
+    requestedBy: request.requestedBy
+      ? { id: request.requestedBy.id, name: request.requestedBy.name }
+      : null,
+    decidedAt: request.decidedAt,
+    decisionNote: request.decisionNote,
+    createdAt: request.createdAt,
   };
 }
 
@@ -416,5 +445,166 @@ export class AdmissionWaitlistController {
       academicCycleSectionId: entry.academicCycleSectionId,
     });
     return entryDto(views.find((view) => view.entry.id === id)!);
+  }
+}
+
+// Campus moves (reference ShowStudentProfile::moveCampus,
+// ListCampusMoveRequests, CampusMoveRequestPolicy). Who may do what is
+// decided by CampusMoveAuthority, so these routes name no permission.
+@ApiTags('Campus moves')
+@ApiBearerAuth('bearer')
+@CampusRoute()
+@Controller()
+export class CampusMovesController {
+  constructor(
+    private readonly moves: CampusMoves,
+    private readonly views: StudentViews,
+  ) {}
+
+  @Get('campus-moves')
+  @ApiOperation({
+    summary: 'Open campus move requests of the working campus',
+    description:
+      'For a person who may decide moves here (approve campus move, or the organization permission move students between campuses) or ask for them (request campus move).',
+  })
+  @ApiOkResponse({ type: CampusMovesDto })
+  @ApiErrorResponses(...ERRORS)
+  async list(
+    @CurrentAuth() auth: AuthContext,
+    @Campus() campus: CampusAccess,
+  ): Promise<CampusMovesDto> {
+    const open = await this.moves.open(auth.user.id, campus.school);
+    return {
+      incoming: open.incoming.map(moveDto),
+      outgoing: open.outgoing.map(moveDto),
+    };
+  }
+
+  @Get('campus-moves/destinations')
+  @ApiOperation({
+    summary: 'Sections a learner of this campus could move to',
+    description:
+      'Active sections of the current school year of each other campus of the organization.',
+  })
+  @ApiOkResponse({ type: [CampusSectionDto] })
+  @ApiErrorResponses(...ERRORS)
+  async destinations(
+    @CurrentAuth() auth: AuthContext,
+    @Campus() campus: CampusAccess,
+  ): Promise<CampusSectionDto[]> {
+    const sections = await this.moves.destinations(auth.user.id, campus.school);
+    const campuses = await this.moves.campusNames(
+      sections.map((section) => section.schoolId),
+    );
+    return sections.map((section) => ({
+      ...sectionBrief(section),
+      campus: { id: section.schoolId, name: campuses.get(section.schoolId)! },
+    }));
+  }
+
+  @Post('students/:id/campus-move')
+  @HttpCode(HttpStatus.OK)
+  @RequireVerifiedEmail()
+  @ApiOperation({
+    summary: 'Move a learner to another campus, or ask that campus',
+    description:
+      'With the organization permission "move students between campuses" the learner moves now: one enrollment, the same admission number and history, and a new placement. Otherwise "request campus move" asks the receiving campus, which decides. Refused for a closed enrollment, campuses of different organizations, an admission number taken there, and a second open request.',
+  })
+  @ApiOkResponse({ type: CampusMoveOutcomeDto })
+  @ApiErrorResponses(...WRITE_ERRORS)
+  async move(
+    @CurrentAuth() auth: AuthContext,
+    @Campus() campus: CampusAccess,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() body: MoveCampusDto,
+  ): Promise<CampusMoveOutcomeDto> {
+    const outcome = await this.moves.moveOrRequest(
+      auth.user.id,
+      campus.school,
+      id,
+      body,
+    );
+    return {
+      moved: outcome.enrollment !== null,
+      student: outcome.enrollment
+        ? await this.views.student(outcome.enrollment)
+        : null,
+      request: outcome.request
+        ? moveDto(await this.moves.find(outcome.request.id))
+        : null,
+    };
+  }
+
+  @Post('campus-moves/:id/approve')
+  @HttpCode(HttpStatus.OK)
+  @RequireVerifiedEmail()
+  @ApiOperation({
+    summary: 'Approve a request: the learner moves now',
+    description:
+      'At the receiving campus (approve campus move, or the organization permission). A decided request is final.',
+  })
+  @ApiOkResponse({ type: CampusMoveRequestDto })
+  @ApiErrorResponses(...WRITE_ERRORS)
+  approve(
+    @CurrentAuth() auth: AuthContext,
+    @Campus() campus: CampusAccess,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() body: NoteDto,
+  ): Promise<CampusMoveRequestDto> {
+    return this.decide(auth, campus, id, 'approve', body);
+  }
+
+  @Post('campus-moves/:id/reject')
+  @HttpCode(HttpStatus.OK)
+  @RequireVerifiedEmail()
+  @ApiOperation({
+    summary: 'Reject a request: the learner stays',
+    description: 'At the receiving campus. A decided request is final.',
+  })
+  @ApiOkResponse({ type: CampusMoveRequestDto })
+  @ApiErrorResponses(...WRITE_ERRORS)
+  reject(
+    @CurrentAuth() auth: AuthContext,
+    @Campus() campus: CampusAccess,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() body: NoteDto,
+  ): Promise<CampusMoveRequestDto> {
+    return this.decide(auth, campus, id, 'reject', body);
+  }
+
+  @Post('campus-moves/:id/cancel')
+  @HttpCode(HttpStatus.OK)
+  @RequireVerifiedEmail()
+  @ApiOperation({
+    summary: 'Take back a request this campus sent',
+    description:
+      'For a person who may ask at the sending campus, or holds the organization permission. A decided request is final.',
+  })
+  @ApiOkResponse({ type: CampusMoveRequestDto })
+  @ApiErrorResponses(...WRITE_ERRORS)
+  cancel(
+    @CurrentAuth() auth: AuthContext,
+    @Campus() campus: CampusAccess,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() body: NoteDto,
+  ): Promise<CampusMoveRequestDto> {
+    return this.decide(auth, campus, id, 'cancel', body);
+  }
+
+  private async decide(
+    auth: AuthContext,
+    campus: CampusAccess,
+    id: string,
+    decision: 'approve' | 'reject' | 'cancel',
+    body: NoteDto,
+  ): Promise<CampusMoveRequestDto> {
+    await this.moves.decide(
+      auth.user.id,
+      campus.school,
+      id,
+      decision,
+      body.note ?? null,
+    );
+    return moveDto(await this.moves.find(id));
   }
 }

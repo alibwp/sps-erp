@@ -13,7 +13,12 @@ import {
 } from 'class-validator';
 import { IsCalendarDay } from '../academic/academic.dto.js';
 import { PersonDto, SectionBriefDto } from '../curriculum/curriculum.dto.js';
-import { WAITLIST_STATUSES, type WaitlistStatus } from './moving.constants.js';
+import {
+  CAMPUS_MOVE_STATUSES,
+  type CampusMoveStatus,
+  WAITLIST_STATUSES,
+  type WaitlistStatus,
+} from './moving.constants.js';
 import { OptionalReason, StudentDto } from './students.dto.js';
 
 // The most learners one promotion or graduation takes at once.
@@ -135,6 +140,28 @@ export class WaitlistQueryDto {
   status?: WaitlistStatus;
 }
 
+export class MoveCampusDto {
+  @ApiProperty({
+    format: 'uuid',
+    description:
+      'An active section of the current school year of another campus of this organization',
+  })
+  @IsUUID('all')
+  academicCycleSectionId: string;
+
+  @ApiPropertyOptional({ maxLength: 500, nullable: true, type: String })
+  @OptionalReason()
+  reason?: string | null;
+
+  @ApiPropertyOptional({
+    format: 'date',
+    description: 'From when; defaults to the campus’s today, never later',
+  })
+  @IsOptional()
+  @IsCalendarDay()
+  effectiveOn?: string;
+}
+
 // ---------- Responses ----------
 
 export class PromotionDto {
@@ -191,4 +218,57 @@ export class WaitlistOfferDto {
   })
   entry: WaitlistEntryDto | null;
   @ApiProperty({ nullable: true, type: String }) message: string | null;
+}
+
+export class CampusBriefDto {
+  @ApiProperty({ format: 'uuid' }) id: string;
+  @ApiProperty() name: string;
+}
+
+export class CampusSectionDto extends SectionBriefDto {
+  @ApiProperty({ type: CampusBriefDto }) campus: CampusBriefDto;
+}
+
+export class CampusMoveRequestDto {
+  @ApiProperty({ format: 'uuid' }) id: string;
+  @ApiProperty({ format: 'uuid', description: 'The enrollment' })
+  studentId: string;
+  @ApiProperty({ type: PersonDto, nullable: true }) learner: PersonDto | null;
+  @ApiProperty() admissionNumber: string;
+  @ApiProperty({ type: CampusBriefDto }) from: CampusBriefDto;
+  @ApiProperty({ type: CampusBriefDto }) to: CampusBriefDto;
+  @ApiProperty({ format: 'uuid' }) academicCycleSectionId: string;
+  @ApiProperty({ enum: CAMPUS_MOVE_STATUSES }) status: CampusMoveStatus;
+  @ApiProperty({ nullable: true, type: String }) reason: string | null;
+  @ApiProperty({ format: 'date' }) effectiveOn: string;
+  @ApiProperty({ type: PersonDto, nullable: true })
+  requestedBy: PersonDto | null;
+  @ApiProperty({ format: 'date-time', nullable: true, type: String })
+  decidedAt: Date | null;
+  @ApiProperty({ nullable: true, type: String }) decisionNote: string | null;
+  @ApiProperty({ format: 'date-time' }) createdAt: Date;
+}
+
+export class CampusMovesDto {
+  @ApiProperty({
+    type: [CampusMoveRequestDto],
+    description: 'Open requests for this campus to decide',
+  })
+  incoming: CampusMoveRequestDto[];
+  @ApiProperty({
+    type: [CampusMoveRequestDto],
+    description: 'Open requests this campus sent',
+  })
+  outgoing: CampusMoveRequestDto[];
+}
+
+export class CampusMoveOutcomeDto {
+  @ApiProperty({
+    description:
+      'True when the learner moved now; false when the receiving campus was asked',
+  })
+  moved: boolean;
+  @ApiProperty({ type: StudentDto, nullable: true }) student: StudentDto | null;
+  @ApiProperty({ type: CampusMoveRequestDto, nullable: true })
+  request: CampusMoveRequestDto | null;
 }

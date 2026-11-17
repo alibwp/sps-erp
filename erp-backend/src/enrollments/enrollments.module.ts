@@ -11,10 +11,12 @@ import { CycleSections } from '../curriculum/cycle-sections.service.js';
 import { IdentityModule } from '../identity/identity.module.js';
 import { OrganizationsModule } from '../organizations/organizations.module.js';
 import { AdmissionWaitlist } from './admission-waitlist.service.js';
+import { CampusMoveAuthority, CampusMoves } from './campus-moves.service.js';
 import { EnrollmentPlacements } from './enrollment-placements.service.js';
 import { EnrollmentStatuses } from './enrollment-statuses.service.js';
 import { AcademicYearStudentRecord } from './entities/academic-year-student-record.entity.js';
 import { AdmissionWaitlistEntry } from './entities/admission-waitlist-entry.entity.js';
+import { CampusMoveRequest } from './entities/campus-move-request.entity.js';
 import { EnrollmentPlacement } from './entities/enrollment-placement.entity.js';
 import { EnrollmentStatusChange } from './entities/enrollment-status-change.entity.js';
 import { Promotion } from './entities/promotion.entity.js';
@@ -23,13 +25,16 @@ import { GraduatedGuard } from './graduated.guard.js';
 import { isEnrolledLearner, isEnrolledOnlyElsewhere } from './learners.js';
 import {
   AdmissionWaitlistController,
+  CampusMovesController,
   GraduationsController,
   PromotionsController,
 } from './moving.controllers.js';
+import { statusLabel } from './moving.constants.js';
 import { Promotions } from './promotions.service.js';
 import { StudentViews } from './student-views.service.js';
 import { StudentsController } from './students.controller.js';
 import { Students } from './students.service.js';
+import { Transfers } from './transfers.service.js';
 import { WaitlistWithdrawals } from './waitlist-withdrawals.service.js';
 
 export const EnrollmentRuleMessages = {
@@ -43,9 +48,11 @@ export const EnrollmentRuleMessages = {
     `Decide the ${count} open entries of this section's admission queue before archiving it.`,
 } as const;
 
-// Stage 5 part 1: learners, their enrollments, placements and states, with
-// the graduated-learner guard. Later parts and stages register what ends
-// with an enrollment (EnrollmentStatuses.registerCloseHandler).
+// Stage 5 parts 1 and 2: learners, their enrollments, placements and
+// states, with the graduated-learner guard; promotions, graduations, the
+// admission waitlist, campus moves and transfers. Later stages register
+// what ends with an enrollment (EnrollmentStatuses.registerCloseHandler)
+// or follows a campus move (CampusMoves.registerMoveHandler).
 @Module({
   imports: [
     TypeOrmModule.forFeature([
@@ -55,6 +62,7 @@ export const EnrollmentRuleMessages = {
       AcademicYearStudentRecord,
       Promotion,
       AdmissionWaitlistEntry,
+      CampusMoveRequest,
     ]),
     AccessModule,
     AccountsModule,
@@ -68,6 +76,7 @@ export const EnrollmentRuleMessages = {
     PromotionsController,
     GraduationsController,
     AdmissionWaitlistController,
+    CampusMovesController,
   ],
   providers: [
     WaitlistWithdrawals,
@@ -78,8 +87,17 @@ export const EnrollmentRuleMessages = {
     GraduatedGuard,
     Promotions,
     AdmissionWaitlist,
+    CampusMoveAuthority,
+    CampusMoves,
+    Transfers,
   ],
-  exports: [EnrollmentPlacements, EnrollmentStatuses, Students, GraduatedGuard],
+  exports: [
+    EnrollmentPlacements,
+    EnrollmentStatuses,
+    Students,
+    GraduatedGuard,
+    Transfers,
+  ],
 })
 export class EnrollmentsModule implements OnModuleInit {
   constructor(
@@ -87,6 +105,8 @@ export class EnrollmentsModule implements OnModuleInit {
     private readonly sections: CycleSections,
     private readonly accounts: AccountAuthority,
     private readonly roles: RoleAssignments,
+    private readonly statuses: EnrollmentStatuses,
+    private readonly campusMoves: CampusMoves,
   ) {}
 
   onModuleInit(): void {
@@ -131,6 +151,17 @@ export class EnrollmentsModule implements OnModuleInit {
         return open ? EnrollmentRuleMessages.openWaitlist(open) : null;
       },
     });
+
+    // A closed enrollment can never move, so a move still waiting would
+    // only fail when somebody tried to approve it.
+    this.statuses.registerCloseHandler((manager, enrollment, status, context) =>
+      this.campusMoves.cancelOpenIn(
+        manager,
+        enrollment.id,
+        context.actorId,
+        `Enrollment closed: ${statusLabel(status)}`,
+      ),
+    );
 
     // A learner enrolled only at another campus is that campus's to manage
     // (UserPolicy::manageAccountAccess, AccountInvitationPolicy).
