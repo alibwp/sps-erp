@@ -21,6 +21,7 @@ export const OPEN_ACADEMIC_PERIODS_JOB = 'open-academic-periods';
 export const GENERATE_ACADEMIC_CYCLES_JOB = 'generate-academic-cycles';
 export const ACADEMIC_CALENDAR_REMINDERS_JOB = 'academic-calendar-reminders';
 export const END_LEAVERS_ACCESS_JOB = 'end-leavers-access';
+export const PROCESS_NOTICES_JOB = 'process-notices';
 
 export const SCHEDULED_JOBS: ScheduledJob[] = [
   // Taken off the queue by a worker; a stale heartbeat means no worker runs.
@@ -58,5 +59,12 @@ export const SCHEDULED_JOBS: ScheduledJob[] = [
     id: END_LEAVERS_ACCESS_JOB,
     queue: QUEUES.maintenance,
     pattern: '15 0 * * *',
+  },
+  // Every 15 minutes (reference ProcessNotices): due scheduled notices are
+  // published and finished ones expire.
+  {
+    id: PROCESS_NOTICES_JOB,
+    queue: QUEUES.maintenance,
+    pattern: '*/15 * * * *',
   },
 ];

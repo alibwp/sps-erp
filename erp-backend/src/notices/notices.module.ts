@@ -5,12 +5,14 @@ import { NoticeNotificationPreference } from './entities/notice-notification-pre
 import { NoticeRecipient } from './entities/notice-recipient.entity.js';
 import { Notice } from './entities/notice.entity.js';
 import { NoticeAudience } from './notice-audience.service.js';
+import { NoticeEmails } from './notice-emails.service.js';
 import { NoticePublisher } from './notice-publisher.service.js';
 import {
   MyNoticesController,
   NoticePreferencesController,
   NoticesController,
 } from './notices.controllers.js';
+import { NoticesProcessor } from './notices.processor.js';
 import { Notices } from './notices.service.js';
 
 // Stage 7: notices. Drafts are written and revised here; publishing fixes
@@ -30,7 +32,13 @@ import { Notices } from './notices.service.js';
     MyNoticesController,
     NoticePreferencesController,
   ],
-  providers: [Notices, NoticeAudience, NoticePublisher],
+  providers: [
+    Notices,
+    NoticeAudience,
+    NoticePublisher,
+    NoticeEmails,
+    NoticesProcessor,
+  ],
   exports: [NoticePublisher],
 })
 export class NoticesModule {}

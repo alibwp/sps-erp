@@ -15,6 +15,6 @@ import { MAIL_TRANSPORT, createMailTransport } from './mail.transport.js';
     MailService,
     MailProcessor,
   ],
-  exports: [MailService],
+  exports: [MailService, MAIL_TRANSPORT],
 })
 export class MailModule {}
