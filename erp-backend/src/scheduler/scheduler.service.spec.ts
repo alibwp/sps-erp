@@ -198,6 +198,7 @@ describe('MaintenanceProcessor', () => {
     generateUpcoming: vi.fn().mockResolvedValue(0),
     sendReminders: vi.fn().mockResolvedValue(0),
   };
+  const staff = { endLeaversAccess: vi.fn().mockResolvedValue(0) };
 
   it('records the queue heartbeat when a worker takes the heartbeat job', async () => {
     const heartbeats = { record: vi.fn().mockResolvedValue(undefined) };
@@ -205,6 +206,7 @@ describe('MaintenanceProcessor', () => {
       heartbeats as never,
       identity as never,
       calendar as never,
+      staff as never,
     ).process({
       name: QUEUE_HEARTBEAT_JOB,
     } as never);
@@ -217,6 +219,7 @@ describe('MaintenanceProcessor', () => {
       heartbeats as never,
       identity as never,
       calendar as never,
+      staff as never,
     ).process({
       name: 'other',
     } as never);
@@ -228,6 +231,7 @@ describe('MaintenanceProcessor', () => {
       { record: vi.fn() } as never,
       identity as never,
       calendar as never,
+      staff as never,
     ).process({
       name: PRUNE_INVITATIONS_JOB,
     } as never);
@@ -243,6 +247,7 @@ describe('MaintenanceProcessor', () => {
       { record: vi.fn() } as never,
       identity as never,
       calendar as never,
+      staff as never,
     ).process({ name } as never);
     expect(calendar[method]).toHaveBeenCalledOnce();
   });
