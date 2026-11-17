@@ -1,14 +1,12 @@
 import { randomInt } from 'node:crypto';
 import { Injectable } from '@nestjs/common';
-import { DataSource, EntityManager, Not } from 'typeorm';
+import { DataSource, EntityManager } from 'typeorm';
 import type { WorkingPeriod } from '../academic/academic-period-context.service.js';
 import { Forbidden } from '../access/access.constants.js';
 import { RoleAssignments } from '../access/role-assignments.service.js';
 import { RoleAuthority } from '../access/role-authority.service.js';
-import { AccountAuthority } from '../accounts/account-authority.service.js';
-import { Accounts } from '../accounts/accounts.service.js';
+import { Accounts, PersonMessages } from '../accounts/accounts.service.js';
 import type { ProvisionAccountDto } from '../accounts/accounts.dto.js';
-import { AuditAction, AuditService } from '../audit/audit.service.js';
 import { TransactionService } from '../common/database/transaction.service.js';
 import { postgresCode } from '../common/errors/error-response.js';
 import {
@@ -21,21 +19,18 @@ import {
   inSchool,
   newInSchool,
 } from '../common/tenancy/school-scope.js';
-import { EmailDomainChecker } from '../common/validation/email-domain.js';
 import { type CampusTerms, campusTerms } from '../curriculum/campus-terms.js';
 import { AcademicCycleSection } from '../curriculum/entities/academic-cycle-section.entity.js';
-import { SessionService } from '../identity/auth/session.service.js';
 import { User } from '../identity/entities/user.entity.js';
-import { Messages, normalizeEmail } from '../identity/identity.constants.js';
+import { normalizeEmail } from '../identity/identity.constants.js';
 import { InvitationService } from '../identity/invitations/invitation.service.js';
 import { School } from '../organizations/entities/school.entity.js';
-import { SchoolMemberships } from '../organizations/school-memberships.service.js';
 import { EnrollmentPlacements } from './enrollment-placements.service.js';
 import { EnrollmentStatuses } from './enrollment-statuses.service.js';
 import { type EnrollmentStatus, isEnrolled } from './enrollment.constants.js';
 import { StudentRecord } from './entities/student-record.entity.js';
+import { LINKED_LEARNERS } from './guardian-links.service.js';
 import {
-  belongsToAnotherSchool,
   holdsRoleHere,
   openEnrollmentElsewhere,
   worksAsStaff,
@@ -55,13 +50,10 @@ export const StudentMessages = {
   admissionDate: (today: string) =>
     `The date of admission field must be a date before or equal to ${today}.`,
   removed: 'Removed from the school',
-  emailElsewhere:
-    'This person also belongs to another school, so only they can change their email.',
-  emailBeyond:
-    'This person has authority beyond this school, so only they can change their email.',
-  emailHoldsMore:
-    'This person holds more at this school than you do, so only they can change their email.',
-  removeHoldsMore: 'This person holds more at this campus than you do.',
+  emailElsewhere: PersonMessages.emailElsewhere,
+  emailBeyond: PersonMessages.emailBeyond,
+  emailHoldsMore: PersonMessages.emailHoldsMore,
+  removeHoldsMore: PersonMessages.removeHoldsMore,
   notThisYear: (t: CampusTerms) =>
     `That ${t.section} does not belong to the working ${t.academicYear}.`,
 } as const;
@@ -99,21 +91,9 @@ export interface StudentListQuery {
   academicYearId?: string;
   academicLevelId?: string;
   academicCycleSectionId?: string;
+  // Only the learners this guardian is linked to.
+  childrenOf?: string;
 }
-
-const DETAIL_FIELDS = [
-  'name',
-  'birthday',
-  'gender',
-  'phone',
-  'address',
-  'addressLine2',
-  'city',
-  'state',
-  'postalCode',
-  'country',
-  'nationality',
-] as const;
 
 // "{campus initials}/{two-digit year}/{six random digits}", the year from
 // the campus's today (StudentService::generateAdmissionNumber).
@@ -134,16 +114,11 @@ export class Students {
     private readonly dataSource: DataSource,
     private readonly transactions: TransactionService,
     private readonly accounts: Accounts,
-    private readonly accountAuthority: AccountAuthority,
     private readonly roleAssignments: RoleAssignments,
     private readonly roleAuthority: RoleAuthority,
-    private readonly memberships: SchoolMemberships,
     private readonly placements: EnrollmentPlacements,
     private readonly statuses: EnrollmentStatuses,
     private readonly invitations: InvitationService,
-    private readonly sessions: SessionService,
-    private readonly emailDomains: EmailDomainChecker,
-    private readonly audit: AuditService,
   ) {}
 
   list(
@@ -158,6 +133,11 @@ export class Students {
         .withDeleted(),
       { schoolId },
     );
+    if (query.childrenOf) {
+      qb.andWhere(`enrollment.userId IN (${LINKED_LEARNERS})`, {
+        guardianId: query.childrenOf,
+      });
+    }
     if (query.status) {
       qb.andWhere('enrollment.status = :status', { status: query.status });
     }
@@ -381,16 +361,7 @@ export class Students {
     id: string,
     details: StudentDetails,
   ): Promise<StudentRecord> {
-    const email = details.email ? normalizeEmail(details.email) : undefined;
-    if (email !== undefined) {
-      const known = await this.dataSource.manager.findOne(User, {
-        where: { email },
-        withDeleted: true,
-      });
-      if (!known && !(await this.emailDomains.canReceiveMail(email))) {
-        throw new ValidationFailed({ email: [Messages.emailInvalid] });
-      }
-    }
+    await this.accounts.checkNewEmail(details.email);
     return this.transactions.run(async (tx) => {
       const manager = tx.manager;
       const enrollment = await this.find(manager, schoolId, id);
@@ -398,58 +369,14 @@ export class Students {
         where: { id: enrollment.userId },
         lock: { mode: 'pessimistic_write' },
       });
-      if (
-        details.birthday &&
-        details.birthday >= (await this.placements.today(manager, schoolId))
-      ) {
-        throw new ValidationFailed({
-          birthday: ['The birthday field must be a date before today.'],
-        });
-      }
-      if (email !== undefined && email !== person.email) {
-        if (await belongsToAnotherSchool(manager, person.id, schoolId)) {
-          throw new ValidationFailed({
-            email: [StudentMessages.emailElsewhere],
-          });
-        }
-        if (
-          await this.accountAuthority.holdsPowerBeyond(
-            manager,
-            person.id,
-            schoolId,
-          )
-        ) {
-          throw new ValidationFailed({ email: [StudentMessages.emailBeyond] });
-        }
-        if (
-          actorId !== person.id &&
-          (await this.roleAuthority.holdsMoreThan(
-            manager,
-            person.id,
-            actorId,
-            schoolId,
-          ))
-        ) {
-          throw new ValidationFailed({
-            email: [StudentMessages.emailHoldsMore],
-          });
-        }
-        const taken = await manager.exists(User, {
-          where: { email, id: Not(person.id) },
-          withDeleted: true,
-        });
-        if (taken) throw new ValidationFailed({ email: [Messages.emailTaken] });
-        person.email = email;
-        person.emailVerifiedAt = null;
-      }
-      for (const field of DETAIL_FIELDS) {
-        if (field === 'name' && !details.name) continue;
-        if (details[field] !== undefined) {
-          (person as unknown as Record<string, unknown>)[field] =
-            details[field];
-        }
-      }
-      await manager.save(person);
+      await this.accounts.updateDetailsIn(
+        manager,
+        actorId,
+        schoolId,
+        person,
+        details,
+        await this.placements.today(manager, schoolId),
+      );
       return enrollment;
     });
   }
@@ -481,41 +408,22 @@ export class Students {
           reason: StudentMessages.removed,
         });
       }
-      await this.memberships.end(manager, enrollment.userId, schoolId);
-      if (
-        await this.keepsAccountWhenRemovedHere(
-          manager,
-          enrollment.userId,
-          schoolId,
-        )
-      ) {
-        return;
-      }
-      const person = await manager.findOneOrFail(User, {
-        where: { id: enrollment.userId },
-      });
-      await this.invitations.revokeIn(manager, person, actorId);
-      await this.sessions.revokeAllForUser(manager, person.id);
-      await manager.softDelete(User, { id: person.id });
-      await this.audit.record(manager, {
-        action: AuditAction.AccountDeleted,
-        subject: { type: 'user', id: person.id },
-        context: { email: person.email, school_id: schoolId },
+      await this.accounts.removeFromCampusIn(
+        manager,
+        actorId,
         schoolId,
-      });
+        enrollment.userId,
+      );
     });
   }
 
   // User::keepsAccountWhenRemovedHere.
-  async keepsAccountWhenRemovedHere(
+  keepsAccountWhenRemovedHere(
     manager: EntityManager,
     userId: string,
     schoolId: string,
   ): Promise<boolean> {
-    return (
-      (await belongsToAnotherSchool(manager, userId, schoolId)) ||
-      (await this.accountAuthority.holdsPowerBeyond(manager, userId, schoolId))
-    );
+    return this.accounts.keepsAccountWhenRemovedHere(manager, userId, schoolId);
   }
 
   private async mustBeAdmissible(
@@ -575,7 +483,9 @@ export class Students {
       .getExists();
   }
 
-  private async generateNumber(
+  // A free admission number at the campus: initials, the campus year and
+  // six random digits.
+  async generateNumber(
     manager: EntityManager,
     school: School,
     today: string,

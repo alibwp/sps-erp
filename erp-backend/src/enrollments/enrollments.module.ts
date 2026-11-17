@@ -19,10 +19,12 @@ import { AdmissionWaitlistEntry } from './entities/admission-waitlist-entry.enti
 import { CampusMoveRequest } from './entities/campus-move-request.entity.js';
 import { EnrollmentPlacement } from './entities/enrollment-placement.entity.js';
 import { EnrollmentStatusChange } from './entities/enrollment-status-change.entity.js';
+import { GuardianLink } from './entities/guardian-link.entity.js';
 import { ParentRecord } from './entities/parent-record.entity.js';
 import { Promotion } from './entities/promotion.entity.js';
 import { StudentRecord } from './entities/student-record.entity.js';
 import { GraduatedGuard } from './graduated.guard.js';
+import { GuardianLinks } from './guardian-links.service.js';
 import { isEnrolledLearner, isEnrolledOnlyElsewhere } from './learners.js';
 import {
   AdmissionWaitlistController,
@@ -49,11 +51,13 @@ export const EnrollmentRuleMessages = {
     `Decide the ${count} open entries of this section's admission queue before archiving it.`,
 } as const;
 
-// Stage 5 parts 1 and 2: learners, their enrollments, placements and
+// Stage 5 parts 1 to 3: learners, their enrollments, placements and
 // states, with the graduated-learner guard; promotions, graduations, the
-// admission waitlist, campus moves and transfers. Later stages register
-// what ends with an enrollment (EnrollmentStatuses.registerCloseHandler)
-// or follows a campus move (CampusMoves.registerMoveHandler).
+// admission waitlist, campus moves and transfers; guardians and their
+// links to learners. Later stages register what ends with an enrollment
+// (EnrollmentStatuses.registerCloseHandler), follows a campus move
+// (CampusMoves.registerMoveHandler) or ends with a guardian link
+// (GuardianLinks.registerUnlinkHook).
 @Module({
   imports: [
     TypeOrmModule.forFeature([
@@ -65,6 +69,7 @@ export const EnrollmentRuleMessages = {
       AdmissionWaitlistEntry,
       CampusMoveRequest,
       ParentRecord,
+      GuardianLink,
     ]),
     AccessModule,
     AccountsModule,
@@ -92,6 +97,7 @@ export const EnrollmentRuleMessages = {
     CampusMoveAuthority,
     CampusMoves,
     Transfers,
+    GuardianLinks,
   ],
   exports: [
     EnrollmentPlacements,
@@ -99,6 +105,7 @@ export const EnrollmentRuleMessages = {
     Students,
     GraduatedGuard,
     Transfers,
+    GuardianLinks,
     StudentViews,
   ],
 })
