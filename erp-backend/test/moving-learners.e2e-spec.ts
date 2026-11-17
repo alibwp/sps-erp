@@ -345,8 +345,8 @@ describe('Moving learners (e2e)', () => {
       const a = await join(room.id, first.user.id).expect(201);
       const b = await join(room.id, urgent.user.id, 5).expect(201);
       const c = await join(room.id, second.user.id).expect(201);
-      // Joining again returns the open entry as it is.
-      const repeat = await join(room.id, first.user.id).expect(201);
+      // Joining again returns the open entry as it is, with 200.
+      const repeat = await join(room.id, first.user.id).expect(200);
       expect(repeat.body.id).toBe(a.body.id);
 
       const queue = await northAdmin

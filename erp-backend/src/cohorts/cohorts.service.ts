@@ -203,7 +203,7 @@ export class Cohorts {
     schoolId: string,
     cohortId: string,
     input: { studentId: string; joinedOn?: string | null },
-  ): Promise<CohortMember> {
+  ): Promise<{ member: CohortMember; created: boolean }> {
     const today = await this.today(this.dataSource.manager, schoolId);
     const joinedOn = input.joinedOn ?? today;
     try {
@@ -240,7 +240,7 @@ export class Cohorts {
             leftOn: IsNull(),
           },
         });
-        if (open) return open;
+        if (open) return { member: open, created: false };
         const member = await manager.save(
           manager.create(CohortMember, {
             cohortId: cohort.id,
@@ -260,18 +260,19 @@ export class Cohorts {
           },
           AuditAction.CohortMembershipChanged,
         );
-        return member;
+        return { member, created: true };
       });
     } catch (error) {
       // The same learner added at the same moment: the one open row.
       if (postgresCode(error) !== '23505') throw error;
-      return this.dataSource.manager.findOneOrFail(CohortMember, {
+      const member = await this.dataSource.manager.findOneOrFail(CohortMember, {
         where: {
           cohortId,
           studentRecordId: input.studentId,
           leftOn: IsNull(),
         },
       });
+      return { member, created: false };
     }
   }
 

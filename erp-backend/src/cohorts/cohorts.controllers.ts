@@ -9,6 +9,7 @@ import {
   Patch,
   Post,
   Query,
+  Res,
 } from '@nestjs/common';
 import {
   ApiBearerAuth,
@@ -17,6 +18,7 @@ import {
   ApiOperation,
   ApiTags,
 } from '@nestjs/swagger';
+import type { Response } from 'express';
 import {
   Campus,
   type CampusAccess,
@@ -257,22 +259,25 @@ export class CohortsController {
   @ApiOperation({
     summary: 'A learner joins the cohort',
     description:
-      'Only a learner attending this campus, never on a day still ahead, never an inactive cohort. A learner who left joins again in a new membership.',
+      'Only a learner attending this campus, never on a day still ahead, never an inactive cohort. A learner who left joins again in a new membership. Answers 201 for a new membership, 200 for the open one.',
   })
   @ApiCreatedResponse({ type: CohortMemberDto })
+  @ApiOkResponse({ type: CohortMemberDto })
   @ApiErrorResponses(...WRITE_ERRORS)
   async join(
     @CurrentAuth() auth: AuthContext,
     @Campus() campus: CampusAccess,
     @Param('id', ParseUUIDPipe) id: string,
     @Body() body: JoinCohortDto,
+    @Res({ passthrough: true }) res: Response,
   ): Promise<CohortMemberDto> {
-    const member = await this.cohorts.join(
+    const { member, created } = await this.cohorts.join(
       reader(auth, campus),
       campus.school.id,
       id,
       body,
     );
+    res.status(created ? HttpStatus.CREATED : HttpStatus.OK);
     return this.member(member.cohortId, member.id);
   }
 
@@ -405,22 +410,25 @@ export class ProgramsController {
   @ApiOperation({
     summary: 'Give a learner a place',
     description:
-      'Needs an active enrollment at this campus and an active programme. One running (requested or active) place per learner; asking again returns it.',
+      'Needs an active enrollment at this campus and an active programme. One running (requested or active) place per learner; asking again returns it. Answers 201 for a new place, 200 for the running one.',
   })
   @ApiCreatedResponse({ type: PlaceDto })
+  @ApiOkResponse({ type: PlaceDto })
   @ApiErrorResponses(...WRITE_ERRORS)
   async join(
     @CurrentAuth() auth: AuthContext,
     @Campus() campus: CampusAccess,
     @Param('id', ParseUUIDPipe) id: string,
     @Body() body: JoinProgramDto,
+    @Res({ passthrough: true }) res: Response,
   ): Promise<PlaceDto> {
-    const place = await this.programs.join(
+    const { place, created } = await this.programs.join(
       auth.user.id,
       campus.school,
       id,
       body,
     );
+    res.status(created ? HttpStatus.CREATED : HttpStatus.OK);
     return placeDto(await this.programs.place(id, place.id));
   }
 

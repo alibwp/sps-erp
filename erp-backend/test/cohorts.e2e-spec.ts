@@ -244,7 +244,7 @@ describe('Cohorts and programmes (e2e)', () => {
       const cohort = (await newCohort().expect(201)).body;
       const child = await learner();
       const first = await join(cohort.id, child.id).expect(201);
-      const again = await join(cohort.id, child.id).expect(201);
+      const again = await join(cohort.id, child.id).expect(200);
       expect(again.body.id).toBe(first.body.id);
 
       expect(
@@ -340,7 +340,7 @@ describe('Cohorts and programmes (e2e)', () => {
         status: 'requested',
         startsOn: '2026-11-10',
       });
-      expect((await place(program.id, child.id).expect(201)).body.id).toBe(
+      expect((await place(program.id, child.id).expect(200)).body.id).toBe(
         first.body.id,
       );
 

@@ -8,6 +8,7 @@ import {
   ParseUUIDPipe,
   Post,
   Query,
+  Res,
 } from '@nestjs/common';
 import {
   ApiBearerAuth,
@@ -17,6 +18,7 @@ import {
   ApiOperation,
   ApiTags,
 } from '@nestjs/swagger';
+import type { Response } from 'express';
 import {
   Campus,
   type CampusAccess,
@@ -350,20 +352,26 @@ export class AdmissionWaitlistController {
   @ApiOperation({
     summary: 'Put a candidate on a section’s waitlist',
     description:
-      'Only for a full section with a capacity, and a campus member who is not enrolled here and not staff. An open entry for the same candidate and section is returned as it is.',
+      'Only for a full section with a capacity, and a campus member who is not enrolled here and not staff. An open entry for the same candidate and section is returned as it is, with 200.',
   })
   @ApiCreatedResponse({ type: WaitlistEntryDto })
+  @ApiOkResponse({
+    type: WaitlistEntryDto,
+    description: 'The open entry already there',
+  })
   @ApiErrorResponses(...WRITE_ERRORS)
   async join(
     @CurrentAuth() auth: AuthContext,
     @Campus() campus: CampusAccess,
     @Body() body: JoinWaitlistDto,
+    @Res({ passthrough: true }) res: Response,
   ): Promise<WaitlistEntryDto> {
-    const entry = await this.waitlist.join(
+    const { entry, created } = await this.waitlist.join(
       auth.user.id,
       campus.school.id,
       body,
     );
+    res.status(created ? HttpStatus.CREATED : HttpStatus.OK);
     return this.view(campus.school.id, entry.id);
   }
 

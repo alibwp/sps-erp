@@ -140,7 +140,7 @@ export class AdmissionWaitlist {
   }
 
   // Joining is safe to repeat: an open entry for the same candidate and
-  // section is returned as it is.
+  // section is returned as it is (created false).
   async join(
     actorId: string,
     schoolId: string,
@@ -149,7 +149,7 @@ export class AdmissionWaitlist {
       userId: string;
       priority?: number;
     },
-  ): Promise<AdmissionWaitlistEntry> {
+  ): Promise<{ entry: AdmissionWaitlistEntry; created: boolean }> {
     return this.transactions.run(async (tx) => {
       const manager = tx.manager;
       const section = await findInSchool(
@@ -168,7 +168,7 @@ export class AdmissionWaitlist {
           status: In([...OPEN_WAITLIST_STATUSES]),
         },
       });
-      if (existing) return existing;
+      if (existing) return { entry: existing, created: false };
 
       const [{ last }] = (await manager.query(
         `SELECT coalesce(max(position), 0)::int AS last
@@ -198,7 +198,7 @@ export class AdmissionWaitlist {
         context: { academic_cycle_section_id: section.id, priority },
         schoolId,
       });
-      return entry;
+      return { entry, created: true };
     });
   }
 

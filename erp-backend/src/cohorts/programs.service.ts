@@ -177,7 +177,7 @@ export class Programs {
       schedule?: string | null;
       staffId?: string | null;
     },
-  ): Promise<ProgramParticipation> {
+  ): Promise<{ place: ProgramParticipation; created: boolean }> {
     try {
       return await this.transactions.run(async (tx) => {
         const manager = tx.manager;
@@ -192,7 +192,7 @@ export class Programs {
           program.id,
           enrollment.id,
         );
-        if (running) return running;
+        if (running) return { place: running, created: false };
         if (
           input.staffId &&
           !(await this.worksHere(manager, input.staffId, school.id))
@@ -227,7 +227,7 @@ export class Programs {
           },
           AuditAction.ProgramParticipationChanged,
         );
-        return place;
+        return { place, created: true };
       });
     } catch (error) {
       if (postgresCode(error) !== '23505') throw error;
@@ -242,7 +242,7 @@ export class Programs {
         },
       );
       if (!place) throw error;
-      return place;
+      return { place, created: false };
     }
   }
 
