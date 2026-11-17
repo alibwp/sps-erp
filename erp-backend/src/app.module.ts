@@ -40,6 +40,7 @@ import { PeopleModule } from './people/people.module.js';
 import { QueueModule } from './queue/queue.module.js';
 import { RedisModule } from './redis/redis.module.js';
 import { SchedulerModule } from './scheduler/scheduler.module.js';
+import { StaffModule } from './staff/staff.module.js';
 import { StorageModule } from './storage/storage.module.js';
 
 @Module({
@@ -76,6 +77,7 @@ import { StorageModule } from './storage/storage.module.js';
     CurriculumModule,
     EnrollmentsModule,
     PeopleModule,
+    StaffModule,
     SchedulerModule,
   ],
   controllers: [AppController],
