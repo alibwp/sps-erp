@@ -38,13 +38,24 @@ import {
   CohortMemberDto,
   CohortQueryDto,
   CreateCohortDto,
+  CreateProgramDto,
   JoinCohortDto,
+  JoinProgramDto,
   LeaveCohortDto,
   MembersQueryDto,
+  MovePlaceDto,
+  PlaceDto,
+  PlacesQueryDto,
+  ProgramDto,
+  ProgramQueryDto,
   UpdateCohortDto,
+  UpdateProgramDto,
 } from './cohorts.dto.js';
 import type { CohortMember } from './entities/cohort-member.entity.js';
 import type { Cohort } from './entities/cohort.entity.js';
+import type { ProgramParticipation } from './entities/program-participation.entity.js';
+import type { Program } from './entities/program.entity.js';
+import { Programs } from './programs.service.js';
 
 const ERRORS = [
   HttpStatus.BAD_REQUEST,
@@ -85,6 +96,31 @@ function memberDto(member: CohortMember): CohortMemberDto {
     joinedOn: member.joinedOn,
     leftOn: member.leftOn,
     addedBy: person(member.addedBy),
+  };
+}
+
+function programDto(program: Program): ProgramDto {
+  return {
+    id: program.id,
+    name: program.name,
+    type: program.type,
+    description: program.description,
+    isActive: program.isActive,
+    createdAt: program.createdAt,
+  };
+}
+
+function placeDto(place: ProgramParticipation): PlaceDto {
+  return {
+    id: place.id,
+    learner: learner(place.studentRecord),
+    status: place.status,
+    startsOn: place.startsOn,
+    endsOn: place.endsOn,
+    schedule: place.schedule,
+    note: place.note,
+    staff: person(place.staff),
+    academicYearId: place.academicYearId,
   };
 }
 
@@ -276,5 +312,143 @@ export class CohortsController {
       (one) => one.id === memberId,
     )!;
     return memberDto(member);
+  }
+}
+
+// Programmes (reference ProgramController, ProgramRecord, ProgramPolicy),
+// behind the programmes feature: 404 while it is off, and the data stays.
+@ApiTags('Programmes')
+@ApiBearerAuth('bearer')
+@CampusRoute()
+@RequireFeature('programmes')
+@Controller('programs')
+export class ProgramsController {
+  constructor(private readonly programs: Programs) {}
+
+  @Get()
+  @RequirePermission('read program')
+  @ApiOperation({ summary: 'The campus’s programmes' })
+  @ApiOkResponse({ type: [ProgramDto] })
+  @ApiErrorResponses(...ERRORS)
+  async list(
+    @Campus() campus: CampusAccess,
+    @Query() query: ProgramQueryDto,
+  ): Promise<ProgramDto[]> {
+    return (await this.programs.list(campus.school.id, query)).map(programDto);
+  }
+
+  @Post()
+  @RequireVerifiedEmail()
+  @RequirePermission('create program')
+  @ApiOperation({
+    summary: 'Make a programme',
+    description: 'The name is unique here ignoring case.',
+  })
+  @ApiCreatedResponse({ type: ProgramDto })
+  @ApiErrorResponses(...WRITE_ERRORS)
+  async create(
+    @CurrentAuth() auth: AuthContext,
+    @Campus() campus: CampusAccess,
+    @Body() body: CreateProgramDto,
+  ): Promise<ProgramDto> {
+    return programDto(
+      await this.programs.create(auth.user.id, campus.school.id, body),
+    );
+  }
+
+  @Get(':id')
+  @RequirePermission('read program')
+  @ApiOperation({ summary: 'One programme' })
+  @ApiOkResponse({ type: ProgramDto })
+  @ApiErrorResponses(...ERRORS)
+  async show(
+    @Campus() campus: CampusAccess,
+    @Param('id', ParseUUIDPipe) id: string,
+  ): Promise<ProgramDto> {
+    return programDto(await this.programs.find(campus.school.id, id));
+  }
+
+  @Patch(':id')
+  @RequireVerifiedEmail()
+  @RequirePermission('update program')
+  @ApiOperation({ summary: 'Change a programme' })
+  @ApiOkResponse({ type: ProgramDto })
+  @ApiErrorResponses(...WRITE_ERRORS)
+  async update(
+    @CurrentAuth() auth: AuthContext,
+    @Campus() campus: CampusAccess,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() body: UpdateProgramDto,
+  ): Promise<ProgramDto> {
+    return programDto(
+      await this.programs.update(auth.user.id, campus.school.id, id, body),
+    );
+  }
+
+  @Get(':id/places')
+  @RequirePermission('read program')
+  @ApiOperation({ summary: 'Places in the programme, past and present' })
+  @ApiOkResponse({ type: [PlaceDto] })
+  @ApiErrorResponses(...ERRORS)
+  async places(
+    @Campus() campus: CampusAccess,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Query() query: PlacesQueryDto,
+  ): Promise<PlaceDto[]> {
+    const program = await this.programs.find(campus.school.id, id);
+    return (await this.programs.places(program.id, query)).map(placeDto);
+  }
+
+  @Post(':id/places')
+  @RequireVerifiedEmail()
+  @RequirePermission('update program')
+  @ApiOperation({
+    summary: 'Give a learner a place',
+    description:
+      'Needs an active enrollment at this campus and an active programme. One running (requested or active) place per learner; asking again returns it.',
+  })
+  @ApiCreatedResponse({ type: PlaceDto })
+  @ApiErrorResponses(...WRITE_ERRORS)
+  async join(
+    @CurrentAuth() auth: AuthContext,
+    @Campus() campus: CampusAccess,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() body: JoinProgramDto,
+  ): Promise<PlaceDto> {
+    const place = await this.programs.join(
+      auth.user.id,
+      campus.school,
+      id,
+      body,
+    );
+    return placeDto(await this.programs.place(id, place.id));
+  }
+
+  @Post(':id/places/:placeId/status-changes')
+  @HttpCode(HttpStatus.OK)
+  @RequireVerifiedEmail()
+  @RequirePermission('update program')
+  @ApiOperation({
+    summary: 'Move a place on',
+    description:
+      'requested → active, withdrawn; active → completed, withdrawn; withdrawn → active; completed is final. Send the status you saw: a place somebody else changed meanwhile is refused with its current status.',
+  })
+  @ApiOkResponse({ type: PlaceDto })
+  @ApiErrorResponses(...WRITE_ERRORS)
+  async move(
+    @CurrentAuth() auth: AuthContext,
+    @Campus() campus: CampusAccess,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('placeId', ParseUUIDPipe) placeId: string,
+    @Body() body: MovePlaceDto,
+  ): Promise<PlaceDto> {
+    await this.programs.changeStatus(
+      auth.user.id,
+      campus.school.id,
+      id,
+      placeId,
+      body,
+    );
+    return placeDto(await this.programs.place(id, placeId));
   }
 }

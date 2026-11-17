@@ -85,6 +85,8 @@ export const AuditAction = {
   StaffLeaveStatusChanged: 'staff_leave.status_changed',
   CohortChanged: 'cohort.changed',
   CohortMembershipChanged: 'cohort.membership_changed',
+  ProgramChanged: 'program.changed',
+  ProgramParticipationChanged: 'program.participation_changed',
   AccountDeleted: 'account.deleted',
 } as const;
 
