@@ -174,28 +174,33 @@ export class TeachingAssignments {
     });
   }
 
-  // A person who leaves the campus stops teaching there from that day and
-  // hands back the sections they were class teacher of in running years
-  // (reference EndSchoolMembership::endDutiesFrom). Runs inside the
-  // membership change's transaction.
+  // A person who leaves the campus stops teaching there from their first
+  // day away (today unless given: a leaver whose last day is ahead) and
+  // hands back the sections they were class teacher of in running years,
+  // but only once that day has come: a leaver still at work keeps their
+  // classes until they go (reference EndSchoolMembership::endDutiesFrom).
+  // Runs inside the caller's transaction.
   async endDutiesFrom(
     manager: EntityManager,
     userId: string,
     schoolId: string,
+    firstDayAway?: string,
   ): Promise<void> {
     const today = await this.today(manager, schoolId);
+    const day = firstDayAway ?? today;
     const running = await manager
       .createQueryBuilder(TeachingAssignment, 'assignment')
       .where('assignment.schoolId = :schoolId', { schoolId })
       .andWhere('assignment.userId = :userId', { userId })
-      .andWhere('(assignment.endsOn IS NULL OR assignment.endsOn > :today)', {
-        today,
+      .andWhere('(assignment.endsOn IS NULL OR assignment.endsOn > :day)', {
+        day,
       })
       .setLock('pessimistic_write')
       .getMany();
     for (const assignment of running) {
-      await this.endOn(manager, assignment, today);
+      await this.endOn(manager, assignment, day);
     }
+    if (day > today) return;
     await manager.query(
       `UPDATE academic_cycle_sections
           SET homeroom_teacher_id = NULL, updated_at = now()

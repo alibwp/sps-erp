@@ -4,9 +4,10 @@ import { HealthModule } from '../health/health.module.js';
 import { IdentityModule } from '../identity/identity.module.js';
 import { MaintenanceProcessor } from './maintenance.processor.js';
 import { SchedulerService } from './scheduler.service.js';
+import { StaffModule } from '../staff/staff.module.js';
 
 @Module({
-  imports: [HealthModule, IdentityModule, AcademicModule],
+  imports: [HealthModule, IdentityModule, AcademicModule, StaffModule],
   providers: [SchedulerService, MaintenanceProcessor],
   exports: [SchedulerService],
 })
